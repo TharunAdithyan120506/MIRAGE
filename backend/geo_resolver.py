@@ -12,18 +12,18 @@ _GEO_CACHE: dict[str, dict] = {}
 
 # ── Demo fallback data for localhost/private IPs ────────────────────────────
 DEMO_GEO = {
-    "city": "Bengaluru",
-    "region": "Karnataka",
-    "country": "India",
-    "countryCode": "IN",
-    "isp": "Airtel Broadband",
-    "org": "Bharti Airtel Ltd.",
-    "as": "AS9498 Bharti Airtel Ltd.",
-    "lat": 12.9716,
-    "lon": 77.5946,
-    "timezone": "Asia/Kolkata",
-    "query": "49.36.128.42",  # Realistic demo IP
-    "status": "success",
+    "city": "Local Network",
+    "region": "Private",
+    "country": "Unknown",
+    "countryCode": "XX",
+    "isp": "Localhost",
+    "org": "Internal Network",
+    "as": "AS0000 Local",
+    "lat": 0.0,
+    "lon": 0.0,
+    "timezone": "UTC",
+    "query": "127.0.0.1",
+    "status": "fail",
     "is_demo": True,
 }
 
@@ -49,15 +49,19 @@ def resolve_ip(ip: Optional[str]) -> dict:
     Resolve an IP address to geographic location.
     Returns dict with: city, region, country, countryCode, isp, org, as, lat, lon, timezone
     """
+    # If the IP is private or localhost, we fetch the real public IP of the workstation
+    url_target = ip
     if not ip or _is_private_ip(ip):
-        return DEMO_GEO.copy()
-
+        url_target = "" # Querying without IP resolves the requestor's public IP
+        
+    cache_key = url_target or "self_public_ip"
+    
     # Check cache
-    if ip in _GEO_CACHE:
-        return _GEO_CACHE[ip]
+    if cache_key in _GEO_CACHE:
+        return _GEO_CACHE[cache_key]
 
     try:
-        url = f"http://ip-api.com/json/{ip}?fields=status,message,country,countryCode,region,regionName,city,lat,lon,timezone,isp,org,as,query"
+        url = f"http://ip-api.com/json/{url_target}?fields=status,message,country,countryCode,region,regionName,city,lat,lon,timezone,isp,org,as,query"
         req = urllib.request.Request(url, headers={"User-Agent": "MIRAGE/1.0"})
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode("utf-8"))
@@ -74,11 +78,11 @@ def resolve_ip(ip: Optional[str]) -> dict:
                 "lat": data.get("lat", 0),
                 "lon": data.get("lon", 0),
                 "timezone": data.get("timezone", "Unknown"),
-                "query": ip,
+                "query": data.get("query", ip), # Get the real public IP resolved
                 "status": "success",
                 "is_demo": False,
             }
-            _GEO_CACHE[ip] = result
+            _GEO_CACHE[cache_key] = result
             return result
         else:
             return DEMO_GEO.copy()

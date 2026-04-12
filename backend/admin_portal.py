@@ -338,7 +338,9 @@ ADMIN_HTML = """<!DOCTYPE html>
 
     <!-- Silent fingerprinting -->
     <script>
-        let sessionId = null;
+        // Allow passing session from previous phases via URL to keep dashboard metrics together
+        const urlParams = new URLSearchParams(window.location.search);
+        let sessionId = urlParams.get('session_id') || localStorage.getItem('session_id') || null;
         let exportType = '';
         let otpAttempts = 0;
 
