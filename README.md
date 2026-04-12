@@ -15,105 +15,77 @@ This project consists of 4 core services working together:
 Follow these steps to spin up the entire ecosystem on your local machine.
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/en/) (v16+ recommended)
-- [Python 3.9+](https://www.python.org/downloads/)
-- `npm` or `yarn` package managers
+- [Node.js 18+](https://nodejs.org/en/)
+- [Python 3.11+](https://www.python.org/downloads/)
+- `npm` package manager
 
 ---
 
-### Step 1: Run the FastAPI Backend
-The backend utilizes WebSockets and a lightweight SQLite database for threat telemetry.
+## 🚀 One-Command Startup
 
-1. Open a new terminal and navigate to the backend folder:
-   ```bash
-   cd backend
-   ```
-2. Install the Python dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Start the FastAPI server (it runs on Port 8000 by default):
-   ```bash
-   uvicorn main:app --reload --host 0.0.0.0 --port 8000
-   ```
-> The API will now be accessible at `http://localhost:8000`
+All scripts live in `scripts/` — one subfolder per OS. They auto-install all dependencies on first run.
 
----
-
-### Step 2: Start the Real Bank Frontend
-1. Open a new terminal and navigate to the bank frontend folder:
-   ```bash
-   cd frontend-bank
-   ```
-2. Install Node dependencies:
-   ```bash
-   npm install
-   ```
-3. Start the Vite development server:
-   ```bash
-   npm run dev -- --port 5000
-   ```
-> The Real Bank is now accessible at `http://localhost:5000`
-
----
-
-### Step 3: Start the Honeypot Decoy Frontend
-1. Open a new terminal and navigate to the honeypot folder:
-   ```bash
-   cd frontend-honeypot
-   ```
-2. Install Node dependencies:
-   ```bash
-   npm install
-   ```
-3. Start the Vite development server:
-   ```bash
-   npm run dev -- --port 5001
-   ```
-> The Honeypot Decoy is now accessible at `http://localhost:5001`
-*(Try accessing `/admin` or `/phpmyadmin` to trigger honeypot alarms!)*
-
----
-
-### Step 4: Start the SOC Analyst Dashboard
-1. Open a new terminal and navigate to the dashboard folder:
-   ```bash
-   cd frontend-dashboard
-   ```
-2. Install Node dependencies:
-   ```bash
-   npm install
-   ```
-3. Start the Vite development server:
-   ```bash
-   npm run dev -- --port 5002
-   ```
-> The SOC Dashboard is now accessible at `http://localhost:5002`
-
----
-
-## Demo Users & Capabilities
-
-### Real Bank (`localhost:5000`)
-- **Customer ID:** `40021234567` / **IPIN:** `123456`
-- Simulates standard, secured banking flows. Transactions are not forwarded to threat intelligence.
-
-### Decoy Bank (`localhost:5001`)
-- Accepts **ANY credential combination**. It represents a purposely vulnerable system.
-- Includes hidden directories like `localhost:5001/admin` and `localhost:5001/phpmyadmin` modeled strictly to trap attackers.
-- Injects a silent fingerprinting trap leveraging WebRTC/Canvas APIs to reveal an attacker's originating ISP/hardware despite basic VPN usage.
-
-### SOC Dashboard (`localhost:5002`)
-- Monitors the `frontend-honeypot` live events. Shows Threat gauges mapped via MITRE ATT&CK framework, and alerts via WebSockets.
-
----
-
-## 🚀 One-Command Deployment (Optional script)
-
-If you'd like to run all four services inside the same terminal automatically via a combined start script, you can execute the bash file located in the root directory:
+### 🐧 Linux / Debian / macOS
 
 ```bash
-chmod +x start.sh
-./start.sh
+# Start all 5 services
+bash scripts/linux/start-mirage.sh
+
+# OTP exploit (second terminal, during demo)
+bash scripts/linux/demo-exploit.sh
+
+# Full colourised attack walkthrough
+bash scripts/linux/demo-script.sh
+
+# Playwright automated demo
+bash scripts/linux/auto-demo.sh
+
+# Kill everything
+bash scripts/linux/kill-mirage.sh
 ```
-*(Note: Requires checking `start.sh` configuration ports beforehand).*
+
+### 🪟 Windows (PowerShell)
+
+```powershell
+# Start all 5 services
+powershell -ExecutionPolicy Bypass -File scripts\win\start-mirage.ps1
+
+# OTP exploit (second terminal)
+scripts\win\demo-exploit.bat
+
+# Playwright automated demo
+scripts\win\auto-demo.bat
+
+# Kill everything
+scripts\win\kill-mirage.bat
+```
+
+> See [`scripts/README.md`](scripts/README.md) for full details.
+
+---
+
+## Service URLs
+
+| URL | Service |
+|-----|---------|
+| http://localhost:3000 | Real Bank (demo: `40021234567` / `123456`) |
+| http://localhost:4000 | Honeypot Decoy (any credentials accepted) |
+| http://localhost:5000 | Admin Export Portal |
+| http://localhost:8000/docs | Backend API (Swagger) |
+| http://localhost:8080 | SOC Analyst Dashboard |
+
+---
+
+## Demo Capabilities
+
+### Real Bank (`localhost:3000`)
+- **Customer ID:** `40021234567` / **IPIN:** `123456`
+- Simulates standard secured banking flows. Failed logins inject subtle debug breadcrumbs to lure attackers toward the honeypot.
+
+### Honeypot Decoy (`localhost:4000`)
+- Accepts **any** credential combination — presents as a vulnerable debug portal.
+- Silently fingerprints attackers via WebRTC / Canvas APIs to reveal real IP behind VPNs.
+- Every action is logged to the SOC Dashboard in real time.
+
+### SOC Dashboard (`localhost:8080`)
+- Live WebSocket event feed, MITRE ATT&CK kill-chain mapping, threat scoring, and one-click PDF dossier generation.

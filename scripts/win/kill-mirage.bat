@@ -1,21 +1,14 @@
 @echo off
 REM ════════════════════════════════════════════════════════════════════════════
-REM MIRAGE — OTP Exploit Wrapper (Windows)
-REM Run this from the attacker terminal during the live demo
+REM MIRAGE — Kill All Background Processes (Windows)
 REM ════════════════════════════════════════════════════════════════════════════
 
 echo.
-echo [MIRAGE DEMO] Launching MITM-OTP exploitation framework...
+echo [MIRAGE] Terminating all zombie background processes...
 echo.
 
-REM Try venv first, then system Python
-if exist "backend\.venv\Scripts\python.exe" (
-    backend\.venv\Scripts\python.exe backend\otp_exploit.py
-) else (
-    python backend\otp_exploit.py
-)
+powershell -Command "Get-Process -Name node*, uvicorn*, python* -ErrorAction SilentlyContinue | Stop-Process -Force"
 
-echo.
-echo [+] Now enter OTP 847293 at http://localhost:5000
+echo [MIRAGE] All processes killed.
 echo.
 pause

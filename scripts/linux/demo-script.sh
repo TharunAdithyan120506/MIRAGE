@@ -1,8 +1,13 @@
 #!/bin/bash
 # ════════════════════════════════════════════════════════════════════════════
-# MIRAGE — Full Attack Flow Demo Script
-# Shows the complete hacker journey from real bank to honeypot to admin portal
+# MIRAGE — Full Attack Flow Demo Script (Linux / Debian / macOS)
+# Shows the complete hacker journey: Real Bank → Honeypot → Admin Portal
+# Run from anywhere: bash scripts/linux/demo-script.sh
 # ════════════════════════════════════════════════════════════════════════════
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$ROOT_DIR"
 
 RED='\033[91m'
 GREEN='\033[92m'
@@ -33,8 +38,7 @@ for i in 1 2 3; do
     HTTP_CODE=$(echo "$RESULT" | tail -1)
     BODY=$(echo "$RESULT" | head -1)
     echo -e "  ${RED}Response: HTTP $HTTP_CODE — Login failed${RESET}"
-    
-    # Show debug clues from response
+
     if echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('_debug_failover_notice',''))" 2>/dev/null | grep -q "Debug portal"; then
         echo -e "  ${GREEN}${BOLD}>>> DEBUG CLUE FOUND IN RESPONSE!${RESET}"
         echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print('  → ' + d.get('_debug_failover_notice', ''))" 2>/dev/null
@@ -53,7 +57,6 @@ echo ""
 echo -e "${DIM}>>> Running nmap to scan for additional services...${RESET}"
 echo ""
 
-# Simulate nmap output
 echo "Starting Nmap 7.94 ( https://nmap.org ) at $(date '+%Y-%m-%d %H:%M')"
 echo "Nmap scan report for localhost (127.0.0.1)"
 echo ""
@@ -66,7 +69,6 @@ echo "8080/tcp open  http-alt          Node.js (SOC Dashboard)"
 echo ""
 echo -e "Nmap done: 1 IP address (1 host up) scanned in 2.34 seconds"
 echo ""
-
 echo -e "${GREEN}${BOLD}>>> Found exposed services: port 4000 (debug) and port 5000 (admin export)!${RESET}"
 echo ""
 sleep 1
@@ -105,7 +107,6 @@ curl -s http://localhost:5000/health 2>/dev/null | python3 -m json.tool 2>/dev/n
 echo ""
 echo -e "${GREEN}>>> Admin export portal is live! Clicking export...${RESET}"
 echo ""
-
 echo -e "${DIM}>>> Export requires OTP verification. Running MITM exploit...${RESET}"
 echo ""
 sleep 1
@@ -117,9 +118,7 @@ echo ""
 echo -e "${DIM}>>> Launching MITM-OTP exploit script...${RESET}"
 echo ""
 
-# Run the OTP exploit
-python3 backend/otp_exploit.py 2>/dev/null || python backend/otp_exploit.py 2>/dev/null
-
+python3 "$ROOT_DIR/backend/otp_exploit.py" 2>/dev/null || python3 backend/otp_exploit.py 2>/dev/null || true
 echo ""
 
 # ── PHASE 6: ENTER OTP — GETS REJECTED ───────────────────────────────────────

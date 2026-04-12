@@ -59,46 +59,69 @@ def main():
 
         page.on("console", handle_console)
 
+        # ── PRE-FLIGHT: make sure all services are reachable ──────────────────
+        print_sub("Checking services are up...")
+        for url, label in [
+            ("http://localhost:3000", "Real Bank (3000)"),
+            ("http://localhost:4000", "Honeypot (4000)"),
+            ("http://localhost:5000", "Admin Portal (5000)"),
+        ]:
+            try:
+                page.goto(url, timeout=15000, wait_until="domcontentloaded")
+                print_good(f"{label} is reachable")
+            except Exception:
+                print_bad(f"Cannot reach {label} — is start-mirage.sh running?")
+                browser.close()
+                sys.exit(1)
+
         # ── PHASE 1: REAL BANK ───────────────────────────────────────────────
         print_step("PHASE 1: Attacking Real Bank (port 3000)")
         print_sub("Navigating to target...")
-        
-        # Pause to explain the start
-        page.wait_for_timeout(3000)
-        
-        try:
-            page.goto("http://localhost:3000", timeout=10000)
-        except Exception:
-            print_bad("Cannot reach port 3000. Is the MIRAGE server running?")
-            sys.exit(1)
+
+        page.goto("http://localhost:3000", timeout=15000, wait_until="domcontentloaded")
+        page.wait_for_timeout(2000)
 
         print_sub("Attempting SQL Injection login bypass...")
-        
+
         for i in range(1, 4):
             print_sub(f"Attempt {i}: Admin Login SQLi payload")
-            # Step 1: Credentials
-            page.fill("input[type='text']", "admin' OR '1'='1")
-            page.fill("input[type='password']", f"password123_try_{i}")
+
+            # ── STEP 1: wait for the credentials screen ───────────────────
+            # Explicitly wait for the password field (only visible in step 1)
+            page.wait_for_selector(
+                "input[placeholder='Enter your IPIN']",
+                state="visible", timeout=15000
+            )
+            page.fill("input[placeholder='Enter your Customer ID']", "admin' OR '1'='1")
+            page.fill("input[placeholder='Enter your IPIN']", f"password123_try_{i}")
+            page.wait_for_timeout(800)   # let judges read the filled fields
+
+            # Click 'Continue' → transitions to OTP step (no API call yet)
             page.click("button[type='submit']")
-            
-            # Walk the judges through the fails
-            page.wait_for_timeout(2000)
-            
-            # Step 2: Verification (OTP)
-            page.wait_for_selector("input[placeholder='Enter 6-digit OTP']")
-            page.wait_for_timeout(1000) # pause before typing OTP
+
+            # ── STEP 2: wait for OTP screen ───────────────────────────────
+            page.wait_for_selector(
+                "input[placeholder='Enter 6-digit OTP']",
+                state="visible", timeout=10000
+            )
+            page.wait_for_timeout(1000)   # pause so judges see OTP screen
             page.fill("input[placeholder='Enter 6-digit OTP']", "123456")
-            page.wait_for_timeout(500)
+            page.wait_for_timeout(600)
+
+            # Click 'Login Securely' → actual API call, will fail for SQLi
             page.click("button[type='submit']")
-            
-            # Wait for error and back to Step 1
-            page.wait_for_timeout(3000)
-            
-            # The UI should show an error
+
+            # Wait for React to process the error and reset to step 1
+            # (wait for password field to reappear = step 1 is back)
             if i < 3:
+                page.wait_for_selector(
+                    "input[placeholder='Enter your IPIN']",
+                    state="visible", timeout=15000
+                )
                 print_bad("Login failed. Trying another payload...")
-                page.wait_for_timeout(2000) # Pause so they see the lockout/error string
+                page.wait_for_timeout(1500)
             else:
+                page.wait_for_timeout(3000)
                 print_good("Multiple failures triggered! Checking console for leaks...")
 
         page.wait_for_timeout(4000)
@@ -111,19 +134,29 @@ def main():
         # ── PHASE 2: HONEYPOT ────────────────────────────────────────────────
         print_step("PHASE 2: Pivoting to Honeypot (port 4000)")
         print_sub("Navigating to exposed debug portal...")
-        page.goto("http://localhost:4000")
-        
+        page.goto("http://localhost:4000", timeout=15000, wait_until="domcontentloaded")
+
+        # ── Step 1 of honeypot: credentials ───────────────────────────────────
         print_sub("Trying basic admin credentials...")
-        page.fill("input[type='text']", "admin")
-        page.fill("input[type='password']", "admin123")
+        page.wait_for_selector(
+            "input[placeholder='Enter your Customer ID']",
+            state="visible", timeout=10000
+        )
+        page.fill("input[placeholder='Enter your Customer ID']", "admin")
+        page.fill("input[placeholder='Enter your IPIN']", "admin123")
+        page.wait_for_timeout(800)
         page.click("button[type='submit']")
-        
-        # Step 2: Verification (OTP) on Honeypot
-        page.wait_for_selector("input[placeholder='Enter 6-digit OTP']")
-        # Since it's a honeypot, ANY OTP is accepted, but type one anyway
+
+        # ── Step 2 of honeypot: OTP (honeypot accepts any OTP) ────────────────
+        page.wait_for_selector(
+            "input[placeholder='Enter 6-digit OTP']",
+            state="visible", timeout=10000
+        )
+        page.wait_for_timeout(800)
         page.fill("input[placeholder='Enter 6-digit OTP']", "000000")
+        page.wait_for_timeout(500)
         page.click("button[type='submit']")
-        
+
         page.wait_for_load_state("networkidle")
         print_good("Bypass successful! Inside the banking portal.")
         

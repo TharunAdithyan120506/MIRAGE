@@ -1,7 +1,8 @@
 $ErrorActionPreference = "Stop"
 
 $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Definition
-Set-Location $SCRIPT_DIR
+$ROOT_DIR   = Split-Path -Parent (Split-Path -Parent $SCRIPT_DIR)
+Set-Location $ROOT_DIR
 
 Write-Host ""
 Write-Host "=============================================================="
@@ -35,7 +36,7 @@ if (-not (Test-Path ".\.venv")) {
 Write-Host "[MIRAGE] Installing Python dependencies..."
 & .\.venv\Scripts\python.exe -m pip install -r requirements.txt -q
 
-Set-Location $SCRIPT_DIR
+Set-Location $ROOT_DIR
 
 $apps = @("frontend-bank", "frontend-honeypot", "frontend-dashboard")
 
@@ -54,7 +55,7 @@ Write-Host ""
 
 Write-Host "Backend API     -> http://localhost:8000"
 Start-Job -Name Backend -ScriptBlock {
-    Set-Location "$using:SCRIPT_DIR\backend"
+    Set-Location "$using:ROOT_DIR\backend"
     .\.venv\Scripts\uvicorn.exe main:app --host 0.0.0.0 --port 8000 --reload 2>&1 | ForEach-Object { "$_" }
 }
 
@@ -62,25 +63,25 @@ Start-Sleep -Seconds 2
 
 Write-Host "Admin Portal    -> http://localhost:5000"
 Start-Job -Name AdminPortal -ScriptBlock {
-    Set-Location "$using:SCRIPT_DIR\backend"
+    Set-Location "$using:ROOT_DIR\backend"
     .\.venv\Scripts\uvicorn.exe admin_portal:app --host 0.0.0.0 --port 5000 --reload 2>&1 | ForEach-Object { "$_" }
 }
 
 Write-Host "Real Bank       -> http://localhost:3000"
 Start-Job -Name Bank -ScriptBlock {
-    Set-Location "$using:SCRIPT_DIR\frontend-bank"
+    Set-Location "$using:ROOT_DIR\frontend-bank"
     npx vite --port 3000 2>&1 | ForEach-Object { "$_" }
 }
 
 Write-Host "Honeypot        -> http://localhost:4000"
 Start-Job -Name Honeypot -ScriptBlock {
-    Set-Location "$using:SCRIPT_DIR\frontend-honeypot"
+    Set-Location "$using:ROOT_DIR\frontend-honeypot"
     npx vite --port 4000 2>&1 | ForEach-Object { "$_" }
 }
 
 Write-Host "SOC Dashboard   -> http://localhost:8080"
 Start-Job -Name Dashboard -ScriptBlock {
-    Set-Location "$using:SCRIPT_DIR\frontend-dashboard"
+    Set-Location "$using:ROOT_DIR\frontend-dashboard"
     npx vite --port 8080 2>&1 | ForEach-Object { "$_" }
 }
 
@@ -95,6 +96,7 @@ Write-Host "Backend API:    http://localhost:8000/docs"
 Write-Host "Dashboard:      http://localhost:8080  (SOC analyst view)"
 Write-Host ""
 Write-Host "OTP Exploit:    python backend\otp_exploit.py"
+Write-Host "Press Ctrl+C to stop all services"
 Write-Host "=============================================================="
 Write-Host ""
 
