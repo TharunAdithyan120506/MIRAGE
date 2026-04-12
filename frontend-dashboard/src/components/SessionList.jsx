@@ -10,12 +10,22 @@ const TIER_COLORS = {
 const bw = dash.borderWidth
 const borderBlack = `${bw}px solid ${dash.black}`
 
-function timeAgo(ts) {
+function formatTime(ts) {
   if (!ts) return '—'
-  const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000)
-  if (diff < 60) return `${diff}s ago`
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  return `${Math.floor(diff / 3600)}h ago`
+  const d = new Date(ts)
+  // Show as HH:MM:SS in local time
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  const ss = String(d.getSeconds()).padStart(2, '0')
+  // If it was today, just show time; otherwise show date + time
+  const now = new Date()
+  const isToday = d.toDateString() === now.toDateString()
+  if (isToday) {
+    return `${hh}:${mm}:${ss}`
+  }
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mon = String(d.getMonth() + 1).padStart(2, '0')
+  return `${dd}/${mon} ${hh}:${mm}:${ss}`
 }
 
 export default function SessionList({ sessions, selectedId, onSelect, fillHeight }) {
@@ -246,7 +256,7 @@ export default function SessionList({ sessions, selectedId, onSelect, fillHeight
                   fontFamily: dash.fontMono,
                   fontWeight: 600,
                 }}>
-                  First {timeAgo(sess.started_at)} · Last {timeAgo(sess.last_seen)}
+                  Started {formatTime(sess.started_at)} · Last {formatTime(sess.last_seen)}
                 </div>
               </div>
             </li>

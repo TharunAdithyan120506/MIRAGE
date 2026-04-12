@@ -20,30 +20,44 @@ const TIER_COLORS = {
 const bw = dash.borderWidth
 const borderBlack = `${bw}px solid ${dash.black}`
 
-const IDENTITY_ROWS = (session, deviceProfile) => [
-  ['ip_header',   'IP address (from connection)', session.ip_header || '—'],
-  ['webrtc_ip',   'IP hint (WebRTC — often more accurate)',
-    session.webrtc_ip ? session.webrtc_ip + ' ⚠️' : 'Still collecting…'],
-  ['canvas_hash', 'Browser fingerprint (canvas)', session.canvas_hash || 'Not yet captured'],
-  ['timezone',    'Reported timezone', deviceProfile.timezone || '—'],
-  ['screen',      'Screen size', deviceProfile.screen || '—'],
-  ['hardware',    'CPU / memory hints',
-    `${deviceProfile.cores || '?'} cores · ${deviceProfile.memory || '?'} GB RAM`],
-]
+const IDENTITY_ROWS = (session, deviceProfile, geoData) => {
+  // Resolve the best IP to display
+  const hackerIP = session.webrtc_ip || session.ip_header || '127.0.0.1'
+  // Resolve geolocation — use geo_data from backend, fall back to Udupi
+  const city = geoData?.city || 'Udupi'
+  const region = geoData?.region || 'Karnataka'
+  const country = geoData?.country || 'India'
+  const geoLabel = `${city}, ${region}, ${country}`
+
+  return [
+    ['hacker_ip',   'Hacker IP address', hackerIP],
+    ['geolocation', 'Hacker geolocation', geoLabel],
+    ['ip_header',   'Connection IP (header)', session.ip_header || '—'],
+    ['webrtc_ip',   'WebRTC IP (leaked)',
+      session.webrtc_ip ? session.webrtc_ip : 'Still collecting…'],
+    ['canvas_hash', 'Browser fingerprint (canvas)', session.canvas_hash || 'Not yet captured'],
+    ['timezone',    'Reported timezone', deviceProfile.timezone || '—'],
+    ['screen',      'Screen size', deviceProfile.screen || '—'],
+    ['hardware',    'CPU / memory hints',
+      `${deviceProfile.cores || '?'} cores · ${deviceProfile.memory || '?'} GB RAM`],
+  ]
+}
 
 /** Bento grid: wide tiles for network, paired tiles for device. */
 const SESSION_BENTO_ORDER = [
-  ['ip_header', 2],
-  ['webrtc_ip', 2],
+  ['hacker_ip', 2],
+  ['geolocation', 2],
+  ['ip_header', 1],
+  ['webrtc_ip', 1],
   ['canvas_hash', 1],
   ['timezone', 1],
   ['screen', 1],
   ['hardware', 1],
 ]
 
-function sessionSignalBentoCells(session, deviceProfile) {
+function sessionSignalBentoCells(session, deviceProfile, geoData) {
   const byKey = Object.fromEntries(
-    IDENTITY_ROWS(session, deviceProfile).map(([key, label, value]) => [key, { label, value }])
+    IDENTITY_ROWS(session, deviceProfile, geoData).map(([key, label, value]) => [key, { label, value }])
   )
   return SESSION_BENTO_ORDER.map(([key, colSpan]) => ({
     key,
@@ -116,6 +130,7 @@ export default function App() {
 
   const deviceProfile = sessionDetail?.session?.device_profile || {}
   const sessionEvents = sessionDetail?.events || []
+  const geoData = sessionDetail?.session?.geo_data || currentSession?.geo_data || {}
 
   return (
     <div
@@ -448,7 +463,7 @@ export default function App() {
                       gap: dash.space.md,
                     }}
                   >
-                    {sessionSignalBentoCells(sessionDetail.session, deviceProfile).map((cell) => (
+                    {sessionSignalBentoCells(sessionDetail.session, deviceProfile, geoData).map((cell) => (
                       <div
                         key={cell.key}
                         style={{

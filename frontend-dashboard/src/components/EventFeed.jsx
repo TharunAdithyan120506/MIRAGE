@@ -20,12 +20,13 @@ const EVENT_ICONS = {
 const bw = dash.borderWidth
 const borderBlack = `${bw}px solid ${dash.black}`
 
-function timeAgo(ts) {
+function formatTime(ts) {
   if (!ts) return ''
-  const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000)
-  if (diff < 60) return `${diff}s ago`
-  if (diff < 3600) return `${Math.floor(diff/60)}m ago`
-  return `${Math.floor(diff/3600)}h ago`
+  const d = new Date(ts)
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  const ss = String(d.getSeconds()).padStart(2, '0')
+  return `${hh}:${mm}:${ss}`
 }
 
 function humanEventType(type) {
@@ -278,7 +279,7 @@ export default function EventFeed({ events, flashCritical, fillHeight }) {
                 fontWeight: 700,
                 fontFamily: dash.fontMono,
               }}>
-                {timeAgo(ev.timestamp)}
+                {formatTime(ev.timestamp)}
               </time>
             </div>
           )

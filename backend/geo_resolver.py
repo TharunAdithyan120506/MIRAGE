@@ -12,18 +12,18 @@ _GEO_CACHE: dict[str, dict] = {}
 
 # ── Demo fallback data for localhost/private IPs ────────────────────────────
 DEMO_GEO = {
-    "city": "Local Network",
-    "region": "Private",
-    "country": "Unknown",
-    "countryCode": "XX",
-    "isp": "Localhost",
+    "city": "Udupi",
+    "region": "Karnataka",
+    "country": "India",
+    "countryCode": "IN",
+    "isp": "Local Network",
     "org": "Internal Network",
     "as": "AS0000 Local",
-    "lat": 0.0,
-    "lon": 0.0,
-    "timezone": "UTC",
+    "lat": 13.3409,
+    "lon": 74.7421,
+    "timezone": "Asia/Kolkata",
     "query": "127.0.0.1",
-    "status": "fail",
+    "status": "demo",
     "is_demo": True,
 }
 
