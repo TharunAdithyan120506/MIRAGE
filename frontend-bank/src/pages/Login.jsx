@@ -180,7 +180,11 @@ export default function Login({ onLogin }) {
 
               {locked ? (
                 <div style={{textAlign:'center',padding:'20px 0'}}>
-                  <div style={{fontSize:48,marginBottom:16}}>🔒</div>
+                  <div style={{display:'flex',justifyContent:'center',marginBottom:16}}>
+                    <div style={{width:64,height:64,background:'var(--red-bg)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--hdfc-red)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </div>
+                  </div>
                   <h3 style={{color:'var(--hdfc-red)',marginBottom:8}}>Account Temporarily Locked</h3>
                   <p style={{fontSize:13,color:'var(--text-secondary)',lineHeight:1.6}}>
                     Multiple failed login attempts detected. Your account has been temporarily locked

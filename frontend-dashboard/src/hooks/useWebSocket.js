@@ -8,6 +8,7 @@ export function useWebSocket() {
   const [connected, setConnected] = useState(false)
   const wsRef = useRef(null)
   const reconnectTimer = useRef(null)
+  const connectRef = useRef(() => {})
 
   const connect = useCallback(() => {
     try {
@@ -26,21 +27,27 @@ export function useWebSocket() {
         try {
           const data = JSON.parse(e.data)
           setEvents(prev => [data, ...prev].slice(0, 200)) // Keep last 200
-        } catch {}
+        } catch {
+          /* ignore malformed payloads */
+        }
       }
 
       ws.onclose = () => {
         setConnected(false)
-        reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY)
+        reconnectTimer.current = setTimeout(() => connectRef.current?.(), RECONNECT_DELAY)
       }
 
       ws.onerror = () => {
         ws.close()
       }
     } catch {
-      reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY)
+      reconnectTimer.current = setTimeout(() => connectRef.current?.(), RECONNECT_DELAY)
     }
   }, [])
+
+  useEffect(() => {
+    connectRef.current = connect
+  }, [connect])
 
   useEffect(() => {
     connect()

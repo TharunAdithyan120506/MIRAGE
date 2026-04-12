@@ -103,7 +103,7 @@ def main():
 
         page.wait_for_timeout(4000)
         print_good("Hacker notices internal topology leaked in console output!")
-        print_good("Target acquired: Debug Portal (4000) & Admin Export (5000)")
+        print_good("Target acquired: Debug Portal (4000)")
         
         # Pause before pivot
         page.wait_for_timeout(4000)

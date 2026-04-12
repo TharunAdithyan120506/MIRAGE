@@ -6,14 +6,50 @@ import SessionList from './components/SessionList'
 import InfraMap from './components/InfraMap'
 import DossierButton from './components/DossierButton'
 import { useWebSocket } from './hooks/useWebSocket'
+import { dash, threatScoreLayout, threatTierPillStyle } from './dashboardTheme'
 
 const API = 'http://localhost:8000'
 
 const TIER_COLORS = {
-  'Script Kiddie':     '#1A7A4A',
-  'Opportunist':       '#E05C00',
-  'Targeted Attacker': '#B00020',
-  'APT-Level':         '#8B0000',
+  'Script Kiddie':     '#1B5E20',
+  'Opportunist':       '#E65100',
+  'Targeted Attacker': dash.red,
+  'APT-Level':         dash.redDark,
+}
+
+const bw = dash.borderWidth
+const borderBlack = `${bw}px solid ${dash.black}`
+
+const IDENTITY_ROWS = (session, deviceProfile) => [
+  ['ip_header',   'IP address (from connection)', session.ip_header || '—'],
+  ['webrtc_ip',   'IP hint (WebRTC — often more accurate)',
+    session.webrtc_ip ? session.webrtc_ip + ' ⚠️' : 'Still collecting…'],
+  ['canvas_hash', 'Browser fingerprint (canvas)', session.canvas_hash || 'Not yet captured'],
+  ['timezone',    'Reported timezone', deviceProfile.timezone || '—'],
+  ['screen',      'Screen size', deviceProfile.screen || '—'],
+  ['hardware',    'CPU / memory hints',
+    `${deviceProfile.cores || '?'} cores · ${deviceProfile.memory || '?'} GB RAM`],
+]
+
+/** Bento grid: wide tiles for network, paired tiles for device. */
+const SESSION_BENTO_ORDER = [
+  ['ip_header', 2],
+  ['webrtc_ip', 2],
+  ['canvas_hash', 1],
+  ['timezone', 1],
+  ['screen', 1],
+  ['hardware', 1],
+]
+
+function sessionSignalBentoCells(session, deviceProfile) {
+  const byKey = Object.fromEntries(
+    IDENTITY_ROWS(session, deviceProfile).map(([key, label, value]) => [key, { label, value }])
+  )
+  return SESSION_BENTO_ORDER.map(([key, colSpan]) => ({
+    key,
+    colSpan,
+    ...byKey[key],
+  }))
 }
 
 export default function App() {
@@ -25,22 +61,21 @@ export default function App() {
   const [showOTPModal, setShowOTPModal] = useState(false)
   const [headerFlash, setHeaderFlash] = useState(false)
 
-  // Derive current score/tier from latest session or selected session
   const currentSession = sessions.find(s => s.id === selectedId) || sessions[0] || null
   const displayScore = currentSession?.threat_score || 0
   const displayTier  = currentSession?.tier || 'Script Kiddie'
-  const tierColor    = TIER_COLORS[displayTier] || '#1A7A4A'
+  const tierColor    = TIER_COLORS[displayTier] || '#1B5E20'
 
-  // Fetch sessions periodically
   const fetchSessions = useCallback(async () => {
     try {
       const r = await axios.get(`${API}/api/sessions`)
       setSessions(r.data)
-      // Auto-select latest session
       if (!selectedId && r.data.length > 0) {
         setSelectedId(r.data[0].id)
       }
-    } catch {}
+    } catch {
+      /* API may be offline during local dev */
+    }
   }, [selectedId])
 
   useEffect(() => {
@@ -49,7 +84,6 @@ export default function App() {
     return () => clearInterval(t)
   }, [fetchSessions])
 
-  // Fetch detailed session data when selection changes
   useEffect(() => {
     if (!selectedId) return
     axios.get(`${API}/api/session/${selectedId}`)
@@ -57,313 +91,540 @@ export default function App() {
       .catch(() => {})
   }, [selectedId, wsEvents.length])
 
-  // React to WebSocket events
   useEffect(() => {
     if (wsEvents.length === 0) return
     const latest = wsEvents[0]
 
-    // Refresh sessions on any event
     fetchSessions()
 
-    // Critical event effects
     if (latest.severity === 'CRITICAL' || latest.score_delta >= 20) {
       setFlashCritical(true)
       setHeaderFlash(true)
       setTimeout(() => { setFlashCritical(false); setHeaderFlash(false) }, 2000)
     }
 
-    // OTP trap modal
     if (latest.event_type === 'OTP_TRAP' || latest.type === 'fingerprint_captured') {
       setShowOTPModal(true)
       setTimeout(() => setShowOTPModal(false), 8000)
     }
 
-    // Auto-select session from event
     if (latest.session_id && !selectedId) {
       setSelectedId(latest.session_id)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wsEvents])
 
   const deviceProfile = sessionDetail?.session?.device_profile || {}
   const sessionEvents = sessionDetail?.events || []
-  const geoData = sessionDetail?.session?.geo_data || {}
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: '#0D1117',
-      color: '#E6EDF3',
-      fontFamily: "'Inter', 'Segoe UI', sans-serif",
-      fontSize: 14,
-    }}>
-      {/* ── OTP TRAP MODAL ─────────────────────────────────────────── */}
+    <div
+      className="dash-app"
+      style={{
+        flex: '1 0 auto',
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflowX: 'hidden',
+        overflowY: 'visible',
+        background: dash.bg,
+        color: dash.textBody,
+        fontFamily: dash.fontSans,
+        fontSize: 16,
+        lineHeight: dash.lineBody,
+      }}
+    >
       {showOTPModal && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 9999,
-          background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          animation: 'fadeIn 0.3s ease',
-        }}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="otp-modal-title"
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(17,17,17,0.65)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 20,
+          }}
+        >
           <div style={{
-            background: '#161B22', border: '2px solid #C8102E',
-            borderRadius: 16, padding: 48, maxWidth: 480, textAlign: 'center',
-            boxShadow: '0 0 60px #C8102E44',
+            background: dash.red,
+            border: borderBlack,
+            padding: '32px 28px',
+            maxWidth: 520,
+            width: '100%',
+            textAlign: 'left',
+            boxShadow: dash.shadowHardLg,
+            transform: 'rotate(-0.5deg)',
           }}>
-            <div style={{ fontSize: 64, marginBottom: 16, animation: 'aptPulse 0.8s ease-in-out infinite' }}>🪤</div>
-            <h2 style={{ color: '#C8102E', fontSize: 22, fontWeight: 700, marginBottom: 8 }}>
-              OTP TRAP ENGAGED
+            <div style={{ fontSize: 48, marginBottom: 8, lineHeight: 1 }} aria-hidden>🪤</div>
+            <h2 id="otp-modal-title" style={{
+              color: dash.card,
+              fontSize: 28,
+              fontWeight: 800,
+              margin: '0 0 12px',
+              letterSpacing: '-0.02em',
+              textTransform: 'uppercase',
+            }}>
+              OTP decoy active
             </h2>
-            <p style={{ color: '#8B949E', marginBottom: 24, lineHeight: 1.6 }}>
-              Fingerprinting in progress... Attacker is staring at the OTP form
-              while MIRAGE silently extracts their real IP via WebRTC.
+            <p style={{
+              color: dash.card,
+              margin: '0 0 20px',
+              lineHeight: 1.45,
+              fontSize: 16,
+              fontWeight: 500,
+            }}>
+              This session opened a fake “enter your code” page. MIRAGE is collecting network and device
+              signals (e.g. WebRTC IP) while it stays on that screen.
             </p>
             <div style={{
-              display: 'flex', gap: 8, justifyContent: 'center',
-              flexWrap: 'wrap', marginBottom: 16
+              display: 'flex', gap: 8, justifyContent: 'flex-start',
+              flexWrap: 'wrap', marginBottom: 16,
             }}>
-              {['WebRTC IP Leak', 'Canvas Hash', 'Device Profile', 'Timezone'].map(label => (
+              {['WebRTC IP', 'Canvas', 'Device', 'Timezone'].map(label => (
                 <span key={label} style={{
-                  background: '#1A7A4A22', border: '1px solid #1A7A4A44',
-                  color: '#4ade80', fontSize: 11, padding: '4px 12px', borderRadius: 999
+                  background: dash.card,
+                  border: `${dash.borderWidthSm}px solid ${dash.black}`,
+                  color: dash.black,
+                  fontSize: 12,
+                  fontWeight: 800,
+                  padding: '6px 10px',
+                  textTransform: 'uppercase',
+                  fontFamily: dash.fontMono,
                 }}>
                   ✓ {label}
                 </span>
               ))}
             </div>
-            <div style={{ fontSize: 12, color: '#484F58' }}>
-              Auto-closing in a moment...
+            <div style={{ fontSize: 14, color: dash.card, fontWeight: 600, fontFamily: dash.fontMono }}>
+              Closes automatically.
             </div>
           </div>
         </div>
       )}
 
-      {/* ── HEADER ─────────────────────────────────────────────────── */}
-      <header style={{
-        background: headerFlash ? '#2D1418' : '#161B22',
-        borderBottom: `2px solid ${headerFlash ? '#C8102E' : '#30363D'}`,
-        padding: '0 32px', height: 64,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        position: 'sticky', top: 0, zIndex: 100,
-        transition: 'background 0.3s, border-color 0.3s',
-        boxShadow: headerFlash ? '0 2px 20px #C8102E44' : 'none',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <header
+        className="dash-header"
+        style={{
+          background: dash.bgElevated,
+          borderBottom: borderBlack,
+          padding: `${dash.space.md}px clamp(${dash.space.lg}px, 4vw, 40px)`,
+          flexShrink: 0,
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) auto',
+          alignItems: 'center',
+          gap: `${dash.space.lg}px ${dash.space.xl}px`,
+          zIndex: 100,
+          boxShadow: headerFlash ? `0 ${bw}px 0 ${dash.red}` : 'none',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: dash.space.md, minWidth: 0 }}>
           <div style={{
-            background: '#003366', borderRadius: 8, width: 40, height: 40,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 20, border: '1px solid #004d99'
-          }}>🛡️</div>
-          <div>
-            <div style={{ fontWeight: 900, fontSize: 18, letterSpacing: -0.5 }}>
-              MIRAGE
-              <span style={{ color: '#8B949E', fontWeight: 400, fontSize: 13, marginLeft: 8 }}>
-                SOC Dashboard
+            background: dash.black,
+            border: borderBlack,
+            width: 52,
+            height: 52,
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 24,
+            boxShadow: dash.shadowHard,
+            transform: 'translate(2px, -2px)',
+          }} aria-hidden>
+            <span style={{ filter: 'grayscale(1) brightness(2)' }}>🛡️</span>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{
+              fontWeight: 800,
+              fontSize: 21,
+              letterSpacing: '-0.02em',
+              color: dash.text,
+              textTransform: 'uppercase',
+              lineHeight: 1.2,
+            }}>
+              <span style={{
+                background: dash.red,
+                color: dash.card,
+                padding: '2px 10px',
+                border: `${dash.borderWidthSm}px solid ${dash.black}`,
+                boxShadow: dash.shadowHard,
+              }}>
+                MIRAGE
+              </span>
+              <span style={{ marginLeft: dash.space.sm, fontSize: 15, fontWeight: 700, color: dash.text }}>
+                SOC console
               </span>
             </div>
-            <div style={{ fontSize: 11, color: '#8B949E' }}>
-              Multi-layer Intelligent Reactive Adaptive Grid Engine
-            </div>
+            <p style={{
+              margin: `${dash.space.sm}px 0 0`,
+              fontSize: 14,
+              color: dash.textBody,
+              fontWeight: 500,
+              lineHeight: dash.lineBody,
+              maxWidth: 520,
+            }}>
+              Live honeypot view — pick a session on the left, watch events and the decoy map on the right.
+            </p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-          {/* Live session score summary */}
-          {currentSession && (
-            <div style={{
-              background: '#21262D', border: `1px solid ${tierColor}44`,
-              borderRadius: 8, padding: '8px 16px',
-              display: 'flex', alignItems: 'center', gap: 12
-            }}>
-              <div style={{ fontSize: 11, color: '#8B949E' }}>Active Threat</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: tierColor }}>
-                {displayScore}
-                <span style={{ fontSize: 12, color: '#8B949E', fontWeight: 400 }}>/100</span>
-              </div>
+        <div
+          role="group"
+          aria-label="Connection and session summary"
+          style={{
+            display: 'flex',
+            alignItems: 'stretch',
+            flexWrap: 'wrap',
+            gap: 0,
+            justifyContent: 'flex-end',
+          }}
+        >
+          {[
+            {
+              key: 'feed',
+              label: 'Data feed',
+              body: (
+                <div style={{ display: 'flex', alignItems: 'center', gap: dash.space.sm }}>
+                  <span
+                    style={{
+                      width: 12,
+                      height: 12,
+                      background: connected ? dash.red : dash.textSubtle,
+                      border: `${dash.borderWidthSm}px solid ${dash.black}`,
+                      flexShrink: 0,
+                    }}
+                    aria-hidden
+                  />
+                  <span style={{ fontSize: 15, fontWeight: 800, color: dash.text }}>
+                    {connected ? 'Connected' : 'Disconnected'}
+                  </span>
+                </div>
+              ),
+              sub: 'WebSocket · events stream',
+            },
+            currentSession && {
+              key: 'threat',
+              label: 'Threat score',
+              body: (
+                <span style={{ ...threatScoreLayout.valueCompact, color: tierColor }}>
+                  {displayScore}
+                  <span style={{ ...threatScoreLayout.suffix, color: dash.textBody }}> / 100</span>
+                </span>
+              ),
+              sub: <span style={threatTierPillStyle(tierColor)}>{displayTier}</span>,
+              subIsPill: true,
+            },
+            {
+              key: 'visitors',
+              label: 'Sessions tracked',
+              body: (
+                <span style={{ fontSize: 22, fontWeight: 800, color: dash.text, letterSpacing: '-0.02em' }}>
+                  {sessions.length}
+                </span>
+              ),
+              sub: sessions.length === 1 ? 'active session' : 'active sessions',
+            },
+          ].filter(Boolean).map((block, i) => (
+            <div
+              key={block.key}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                gap: dash.space.xs,
+                paddingLeft: i > 0 ? dash.space.lg : 0,
+                marginLeft: i > 0 ? dash.space.lg : 0,
+                borderLeft: i > 0 ? `${dash.borderWidthSm}px solid ${dash.black}` : 'none',
+                minWidth: block.key === 'threat' ? 140 : 112,
+                maxWidth: block.key === 'threat' ? 220 : 160,
+              }}
+            >
               <div style={{
-                background: tierColor + '22', color: tierColor,
-                border: `1px solid ${tierColor}44`,
-                fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 999
+                fontSize: 10,
+                fontWeight: 800,
+                color: dash.textSubtle,
+                textTransform: 'uppercase',
+                letterSpacing: '0.12em',
+                fontFamily: dash.fontMono,
               }}>
-                {displayTier}
+                {block.label}
+              </div>
+              {block.body}
+              <div style={{
+                fontSize: block.subIsPill ? undefined : 12,
+                color: dash.textBody,
+                fontFamily: block.subIsPill ? undefined : dash.fontMono,
+                fontWeight: block.subIsPill ? undefined : 600,
+                lineHeight: 1.35,
+                wordBreak: 'break-word',
+                marginTop: block.subIsPill ? dash.space.xs : undefined,
+              }}>
+                {block.sub}
               </div>
             </div>
-          )}
-
-          {/* WS status */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{
-              width: 8, height: 8, borderRadius: '50%',
-              background: connected ? '#4ade80' : '#C8102E',
-              boxShadow: connected ? '0 0 8px #4ade80' : '0 0 8px #C8102E',
-              animation: connected ? 'aptPulse 2s infinite' : 'none',
-            }} />
-            <span style={{ fontSize: 12, color: '#8B949E' }}>
-              {connected ? 'LIVE' : 'Reconnecting...'}
-            </span>
-          </div>
-
-          <div style={{ fontSize: 12, color: '#484F58' }}>
-            {sessions.length} session{sessions.length !== 1 ? 's' : ''} tracked
-          </div>
+          ))}
         </div>
       </header>
 
-      {/* ── MAIN GRID ───────────────────────────────────────────────── */}
-      <main style={{ padding: 24 }}>
-        {/* Top row: Gauge + Event Feed */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '300px 1fr',
-          gap: 20, marginBottom: 20
-        }}>
-          {/* Left panel: Gauge + Session detail */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <ThreatGauge score={displayScore} tier={displayTier} />
+      <main className="dash-main-inner" style={{
+        flex: '1 0 auto',
+        width: '100%',
+        maxWidth: 1680,
+        margin: '0 auto',
+        padding: `${dash.space.md}px clamp(${dash.space.lg}px, 3vw, 48px)`,
+        paddingBottom: dash.space.xl,
+        display: 'flex',
+        flexDirection: 'column',
+        background: dash.bg,
+      }}>
+        <section aria-labelledby="dashboard-main-heading" style={{ display: 'flex', flexDirection: 'column', margin: 0, flex: '0 0 auto' }}>
+          <h1 id="dashboard-main-heading" style={{
+            fontSize: 26,
+            fontWeight: 800,
+            color: dash.text,
+            letterSpacing: '-0.02em',
+            textTransform: 'uppercase',
+            margin: `0 0 ${dash.space.md}px`,
+            flexShrink: 0,
+            borderBottom: `4px solid ${dash.red}`,
+            paddingBottom: 10,
+            display: 'inline-block',
+            width: 'fit-content',
+          }}>
+            Dashboard
+          </h1>
+          <div
+            className="dash-layout-main"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(200px, 25%) 1fr',
+              gap: dash.space.section,
+              alignItems: 'start',
+            }}
+          >
+            <div
+              className="dash-left-col"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: dash.space.lg,
+                minWidth: 0,
+                overflow: 'visible',
+              }}
+            >
+              <div style={{ flexShrink: 0 }}>
+                <ThreatGauge score={displayScore} tier={displayTier} />
+              </div>
 
-            {/* Fingerprint + Geolocation detail card */}
-            {sessionDetail?.session && (
-              <div style={{
-                background: '#161B22', border: '1px solid #30363D',
-                borderRadius: 12, padding: 16, fontSize: 12
-              }}>
-                <div style={{
-                  color: '#D4A017', fontWeight: 700, marginBottom: 10,
-                  fontSize: 13, display: 'flex', alignItems: 'center', gap: 6
-                }}>
-                  🕵️ Attacker Identity
-                </div>
-                {[
-                  ['Header IP',   sessionDetail.session.ip_header || '—'],
-                  ['WebRTC IP',   sessionDetail.session.webrtc_ip
-                                    ? sessionDetail.session.webrtc_ip + ' ⚠️'
-                                    : 'Collecting...'],
-                  ['Canvas Hash', sessionDetail.session.canvas_hash || 'Pending...'],
-                ].map(([k, v]) => (
-                  <div key={k} style={{
-                    display: 'flex', justifyContent: 'space-between',
-                    padding: '5px 0', borderBottom: '1px solid #21262D',
-                    gap: 8
+              {sessionDetail?.session && (
+                <div style={{ flexShrink: 0 }}>
+                  <div style={{
+                    color: dash.text,
+                    fontWeight: 800,
+                    fontSize: 19,
+                    marginBottom: dash.space.sm,
+                    letterSpacing: '-0.02em',
+                    textTransform: 'uppercase',
+                    borderBottom: `3px solid ${dash.red}`,
+                    paddingBottom: 8,
+                    display: 'inline-block',
                   }}>
-                    <span style={{ color: '#8B949E', whiteSpace: 'nowrap' }}>{k}</span>
-                    <span style={{
-                      fontFamily: 'monospace', color: '#79C0FF',
-                      fontSize: 11, textAlign: 'right', overflow: 'hidden',
-                      textOverflow: 'ellipsis', maxWidth: 130
-                    }}>
-                      {v}
-                    </span>
+                    Session signals
                   </div>
-                ))}
-
-                {/* Geolocation Section */}
-                {geoData.city && (
-                  <>
-                    <div style={{
-                      color: '#C8102E', fontWeight: 700, marginTop: 12, marginBottom: 6,
-                      fontSize: 12, display: 'flex', alignItems: 'center', gap: 6,
-                      borderTop: '1px solid #30363D', paddingTop: 10,
-                    }}>
-                      📍 Physical Location
-                    </div>
-                    {[
-                      ['City',       `${geoData.city}, ${geoData.region || ''}`],
-                      ['Country',    `${geoData.country || '—'} ${geoData.countryCode === 'IN' ? '🇮🇳' : geoData.countryCode === 'US' ? '🇺🇸' : geoData.countryCode === 'CN' ? '🇨🇳' : geoData.countryCode === 'RU' ? '🇷🇺' : '🌍'}`],
-                      ['ISP',        geoData.isp || '—'],
-                      ['Org',        geoData.org || '—'],
-                      ['Coords',     geoData.lat ? `${geoData.lat.toFixed(4)}, ${geoData.lon.toFixed(4)}` : '—'],
-                    ].map(([k, v]) => (
-                      <div key={k} style={{
-                        display: 'flex', justifyContent: 'space-between',
-                        padding: '4px 0', borderBottom: '1px solid #21262D',
-                        gap: 8
-                      }}>
-                        <span style={{ color: '#8B949E', whiteSpace: 'nowrap' }}>{k}</span>
-                        <span style={{
-                          fontFamily: 'monospace', color: '#F0883E',
-                          fontSize: 11, textAlign: 'right', overflow: 'hidden',
-                          textOverflow: 'ellipsis', maxWidth: 130
+                  <p style={{
+                    margin: `0 0 ${dash.space.md}px`,
+                    color: dash.textBody,
+                    fontSize: 15,
+                    lineHeight: dash.lineBody,
+                  }}>
+                    From the <strong style={{ color: dash.text }}>selected session</strong>. Updates as data arrives.
+                  </p>
+                  <div
+                    className="session-signals-bento"
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                      gap: dash.space.md,
+                    }}
+                  >
+                    {sessionSignalBentoCells(sessionDetail.session, deviceProfile).map((cell) => (
+                      <div
+                        key={cell.key}
+                        style={{
+                          gridColumn: `span ${cell.colSpan}`,
+                          background: dash.bgElevated,
+                          border: `${dash.borderWidthSm}px solid ${dash.black}`,
+                          boxShadow: dash.shadowHard,
+                          padding: `${dash.space.md}px ${dash.space.md}px`,
+                          minHeight: cell.key === 'ip_header' || cell.key === 'webrtc_ip' ? 92 : 80,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: dash.space.sm,
+                          justifyContent: 'flex-start',
+                        }}
+                      >
+                        <div style={{
+                          fontSize: 10,
+                          fontWeight: 800,
+                          color: dash.textSubtle,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.1em',
+                          fontFamily: dash.fontMono,
+                          lineHeight: 1.3,
                         }}>
-                          {v}
-                        </span>
+                          {cell.label}
+                        </div>
+                        <div style={{
+                          fontFamily: dash.fontMono,
+                          color: dash.redDark,
+                          fontSize: 13,
+                          fontWeight: 600,
+                          lineHeight: dash.lineBody,
+                          wordBreak: 'break-word',
+                        }}>
+                          {cell.value}
+                        </div>
                       </div>
                     ))}
-                    {geoData.is_demo && (
-                      <div style={{ fontSize: 10, color: '#484F58', marginTop: 6, fontStyle: 'italic' }}>
-                        ⚡ Demo mode — using simulated IP geolocation
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {/* Device fingerprint section */}
-                <div style={{
-                  color: '#8B949E', fontWeight: 600, marginTop: 10, marginBottom: 6,
-                  fontSize: 11, borderTop: '1px solid #30363D', paddingTop: 8,
-                }}>
-                  🖥️ Device Profile
-                </div>
-                {[
-                  ['Timezone',    deviceProfile.timezone || '—'],
-                  ['Screen',      deviceProfile.screen || '—'],
-                  ['Cores / RAM', `${deviceProfile.cores || '?'} cores / ${deviceProfile.memory || '?'} GB`],
-                  ['Language',    deviceProfile.language || '—'],
-                ].map(([k, v]) => (
-                  <div key={k} style={{
-                    display: 'flex', justifyContent: 'space-between',
-                    padding: '4px 0', borderBottom: '1px solid #21262D',
-                    gap: 8
-                  }}>
-                    <span style={{ color: '#8B949E', whiteSpace: 'nowrap' }}>{k}</span>
-                    <span style={{
-                      fontFamily: 'monospace', color: '#79C0FF',
-                      fontSize: 11, textAlign: 'right', overflow: 'hidden',
-                      textOverflow: 'ellipsis', maxWidth: 130
-                    }}>
-                      {v}
-                    </span>
                   </div>
-                ))}
+                </div>
+              )}
+
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'visible',
+                borderTop: `${dash.borderWidthSm}px dashed ${dash.black}`,
+                paddingTop: dash.space.lg,
+                marginTop: dash.space.sm,
+              }}>
+                <p style={{
+                  margin: `0 0 ${dash.space.md}px`,
+                  fontSize: 15,
+                  color: dash.textBody,
+                  lineHeight: dash.lineBody,
+                  flexShrink: 0,
+                  fontWeight: 700,
+                }}>
+                  <span style={{ color: dash.red, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Sessions</span>
+                  <br />
+                  <span style={{ fontWeight: 500, fontSize: 14 }}>Select a row — drives threat score, signals, and map.</span>
+                </p>
+                <SessionList
+                  fillHeight={false}
+                  sessions={sessions}
+                  selectedId={selectedId}
+                  onSelect={(id) => {
+                    setSelectedId(id)
+                    axios.get(`${API}/api/session/${id}`)
+                      .then(r => setSessionDetail(r.data))
+                      .catch(() => {})
+                  }}
+                />
               </div>
-            )}
 
-            <DossierButton
-              sessionId={selectedId}
-              hasEvents={sessionEvents.length > 0}
-            />
-          </div>
+              <div style={{ flexShrink: 0, marginTop: dash.space.lg }}>
+                <DossierButton
+                  sessionId={selectedId}
+                  hasEvents={sessionEvents.length > 0}
+                />
+              </div>
+            </div>
 
-          {/* Right panel: Event Feed */}
-          <EventFeed events={wsEvents} flashCritical={flashCritical} />
-        </div>
-
-        {/* Bottom row: Session List + Infra Map */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '300px 1fr',
-          gap: 20
-        }}>
-          <SessionList
-            sessions={sessions}
-            selectedId={selectedId}
-            onSelect={(id) => {
-              setSelectedId(id)
-              axios.get(`${API}/api/session/${id}`)
-                .then(r => setSessionDetail(r.data))
-                .catch(() => {})
+            <div className="dash-right-stack" style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: dash.space.lg,
+              minWidth: 0,
+              overflow: 'visible',
             }}
-          />
-          <InfraMap score={displayScore} />
-        </div>
+            >
+              <div className="dash-feed-pane" style={{
+                flex: '0 0 auto',
+                minHeight: 200,
+                maxHeight: 'min(420px, 46vh)',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+              >
+                <p style={{
+                  margin: `0 0 ${dash.space.md}px`,
+                  fontSize: 15,
+                  color: dash.textBody,
+                  lineHeight: dash.lineBody,
+                  flexShrink: 0,
+                  fontWeight: 700,
+                }}>
+                  <span style={{ color: dash.red, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Activity log</span>
+                  <br />
+                  <span style={{ fontWeight: 500, fontSize: 14 }}>Newest events first. Severity shows impact.</span>
+                </p>
+                <EventFeed fillHeight events={wsEvents} flashCritical={flashCritical} />
+              </div>
+              <div className="dash-map-pane" style={{
+                flex: '0 0 auto',
+                width: '100%',
+                minHeight: 'min(920px, 92vh)',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+              >
+                <InfraMap fillHeight score={displayScore} />
+              </div>
+            </div>
+          </div>
+        </section>
       </main>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=JetBrains+Mono&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+        html, body { margin: 0; height: auto; min-height: 100%; }
+        #root { min-height: 100vh; display: flex; flex-direction: column; margin: 0; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #0D1117; }
-        ::-webkit-scrollbar-thumb { background: #30363D; border-radius: 3px; }
-        @keyframes aptPulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+        .dash-app { position: relative; }
+        .dash-app::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          z-index: 0;
+          background-image:
+            linear-gradient(${dash.black} 1px, transparent 1px),
+            linear-gradient(90deg, ${dash.black} 1px, transparent 1px);
+          background-size: 40px 40px;
+          opacity: 0.05;
+        }
+        .dash-app > * { position: relative; z-index: 1; }
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: ${dash.bgElevated}; border-left: 2px solid ${dash.black}; }
+        ::-webkit-scrollbar-thumb { background: ${dash.red}; border: 2px solid ${dash.black}; }
+        @keyframes aptPulse { 0%,100% { opacity:1; } 50% { opacity:0.55; } }
         @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+        @media (max-width: 960px) {
+          .session-signals-bento > div {
+            grid-column: span 1 !important;
+          }
+          .dash-header {
+            grid-template-columns: 1fr !important;
+          }
+          .dash-layout-main {
+            grid-template-columns: 1fr !important;
+          }
+          .dash-feed-pane {
+            min-height: 200px;
+            max-height: min(380px, 50vh) !important;
+          }
+          .dash-map-pane {
+            min-height: min(720px, 85vh) !important;
+          }
+          .dash-left-col {
+            max-height: none;
+            overflow: visible !important;
+          }
+        }
       `}</style>
     </div>
   )
