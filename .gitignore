@@ -3,3 +3,7 @@ __pycache__/
 node_modules/
 .env
 .pytest_cache/
+
+backend/mirage.db
+__pycache__/
+*.pyc
