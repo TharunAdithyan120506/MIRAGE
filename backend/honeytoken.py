@@ -14,18 +14,18 @@ random.seed(42)
 
 # ── Fake AWS / System Credentials ────────────────────────────────────────────
 FAKE_CONFIG = {
-    "AWS_ACCESS_KEY_ID":      "AKIAIOSFODNN7EXAMPLE",
-    "AWS_SECRET_ACCESS_KEY":  "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-    "DB_PASSWORD":            "Pr0d_S3cur3DB!2024",
-    "JWT_SECRET":             "mirage_jwt_supersecret_9f3a1b2c4d5e6f7a",
-    "STRIPE_KEY":             "sk_live_51HZ9xBKLmN2YPQ7aFAKEKEYDONOTUSE",
-    "INTERNAL_API_KEY":       "int_api_8f2d3e1c4b5a69f7e8d2c3b4a5f6e7d8",
-    "REDIS_PASSWORD":         "R3d!sP@ssw0rd_2024",
-    "SMTP_PASSWORD":          "Sm7p_1337_P@ss!",
-    "DB_HOST":                "prod-rds.internal.securebank.in",
-    "DB_NAME":                "securebank_prod",
-    "DB_USER":                "admin",
-    "ENVIRONMENT":            "production",
+    "AWS_ACCESS_KEY_ID":      "DEMO_AKIAIOSFODNN7EXAMPLE",
+    "AWS_SECRET_ACCESS_KEY":  "DEMO_wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+    "DB_PASSWORD":            "DEMO_Pr0d_S3cur3DB!2024",
+    "JWT_SECRET":             "DEMO_mirage_jwt_supersecret_9f3a1b2c4d5e6f7a",
+    "STRIPE_KEY":             "DEMO_sk_fake_51HZ9xBKLmN2YPQ7aFAKEKEYDONOTUSE",
+    "INTERNAL_API_KEY":       "DEMO_int_api_8f2d3e1c4b5a69f7e8d2c3b4a5f6e7d8",
+    "REDIS_PASSWORD":         "DEMO_R3d!sP@ssw0rd_2024",
+    "SMTP_PASSWORD":          "DEMO_Sm7p_1337_P@ss!",
+    "DB_HOST":                "DEMO_prod-rds.internal.securebank.in",
+    "DB_NAME":                "DEMO_securebank_prod",
+    "DB_USER":                "DEMO_admin",
+    "ENVIRONMENT":            "DEMO_production",
 }
 
 FAKE_ENV_FILE = """# SECUREBANK PRODUCTION ENVIRONMENT
@@ -53,7 +53,7 @@ JWT_SECRET=mirage_jwt_supersecret_9f3a1b2c4d5e6f7a
 JWT_EXPIRY=86400
 
 # Payment Gateway
-STRIPE_KEY=sk_live_51HZ9xBKLmN2YPQ7aFAKEKEYDONOTUSE
+STRIPE_KEY=sk_fake_51HZ9xBKLmN2YPQ7aFAKEKEYDONOTUSE
 RAZORPAY_KEY_ID=rzp_live_FAKEKEY123456
 RAZORPAY_KEY_SECRET=rzp_secret_FAKEKEY987654
 
