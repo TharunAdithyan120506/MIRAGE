@@ -1,6 +1,13 @@
 """
 MIRAGE Backend — FastAPI Main Entrypoint
 PRD Section 5.1 — All REST endpoints + WebSocket event stream
+
+PRODUCTION UPDATE:
+- Dedup-aware scoring (no premature 100)
+- Login failure tracking with console clues for port 3000
+- Geolocation resolution from IP
+- Port 5000 admin portal event logging
+- Fixed double-scoring in telemetry
 """
 import uuid
 import json
@@ -8,6 +15,7 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Optional, List
 from contextlib import asynccontextmanager
+from collections import defaultdict
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,6 +32,7 @@ from honeytoken import (
 from mitre_mapper import map_techniques
 from tor_checker import check_ip, load_tor_exit_nodes_from_url
 from report import generate_dossier
+from geo_resolver import resolve_ip
 
 # ── Hardcoded Real Bank Users (PRD Section 3.2) ───────────────────────────────
 REAL_USERS = {
@@ -34,6 +43,9 @@ REAL_USERS = {
     "40035551234": {"pin": "112233", "name": "Rahul Verma",    "account": "XXXX XXXX 3310",
                     "balance": 320000.00, "ifsc": "HDFC0009012"},
 }
+
+# ── Login failure tracking (per IP) ───────────────────────────────────────────
+_LOGIN_FAILURES: dict[str, dict] = defaultdict(lambda: {"count": 0, "locked_until": None})
 
 # ── WebSocket Connection Manager ───────────────────────────────────────────────
 class ConnectionManager:
@@ -76,7 +88,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MIRAGE Engine", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="MIRAGE Engine", version="2.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -111,6 +123,7 @@ def get_or_create_session(session_id: Optional[str], request: Request, db: DBSes
         tier="Script Kiddie",
         started_at=datetime.utcnow(),
         last_seen=datetime.utcnow(),
+        scored_signals=[],
     )
     db.add(sess)
     db.commit()
@@ -126,9 +139,14 @@ async def log_event_and_score(
     payload: dict,
     db: DBSession,
 ) -> dict:
-    delta, new_tier, severity, mitre = compute_score_delta(sess.threat_score, signal_key)
+    """Log event and update score with dedup-aware scoring."""
+    current_signals = sess.scored_signals or []
+    delta, new_tier, severity, mitre, updated_signals = compute_score_delta(
+        sess.threat_score, signal_key, current_signals
+    )
     sess.threat_score = min(sess.threat_score + delta, 100)
     sess.tier = get_tier(sess.threat_score)
+    sess.scored_signals = updated_signals
     sess.last_seen = datetime.utcnow()
     db.commit()
 
@@ -186,16 +204,97 @@ class TelemetryPayload(BaseModel):
     webrtcIP: Optional[str] = None
     canvasHash: Optional[str] = None
 
+class AdminPortalEvent(BaseModel):
+    session_id: Optional[str] = None
+    signal: str
+    path: str
+    payload: Optional[dict] = None
+
 
 # ════════════════════════════════════════════════════════════════════════════
 # REAL BANK ENDPOINTS
 # ════════════════════════════════════════════════════════════════════════════
 
 @app.post("/real/auth")
-async def real_auth(body: RealAuthRequest):
+async def real_auth(body: RealAuthRequest, request: Request):
+    client_ip = get_client_ip(request)
+    tracker = _LOGIN_FAILURES[client_ip]
+
+    # Check if IP is locked
+    if tracker["locked_until"] and datetime.utcnow() < tracker["locked_until"]:
+        remaining = int((tracker["locked_until"] - datetime.utcnow()).total_seconds())
+        return JSONResponse(
+            status_code=429,
+            content={
+                "success": False,
+                "error": "too_many_attempts",
+                "message": f"Account temporarily locked. Try again in {remaining} seconds.",
+                "locked_until": tracker["locked_until"].isoformat(),
+                "debug_trace": "Internal security audit: review http://localhost:4000/admin for debug logs",
+            },
+            headers={
+                "X-Debug-Service": "internal-banking-audit.securebank.in:4000",
+                "X-RateLimit-Remaining": "0",
+                "X-Internal-Redirect": "http://localhost:4000",
+            }
+        )
+
     user = REAL_USERS.get(body.account_number)
     if not user or user["pin"] != body.ipin:
-        raise HTTPException(status_code=401, detail="Invalid account number or IPIN")
+        tracker["count"] += 1
+        attempt_num = tracker["count"]
+
+        # Build escalating debug info based on attempt number
+        debug_info = {}
+        response_headers = {}
+
+        if attempt_num >= 1:
+            debug_info["_debug_auth_failure"] = f"AUTH_FAIL_{attempt_num}: credential validation failed"
+            debug_info["_internal_trace_id"] = f"TRC-{uuid.uuid4().hex[:8].upper()}"
+            response_headers["X-Debug-TraceId"] = debug_info["_internal_trace_id"]
+
+        if attempt_num >= 2:
+            debug_info["_debug_service_map"] = {
+                "banking_portal": "localhost:3000",
+                "internal_debug": "localhost:4000",
+                "admin_export": "localhost:5000",
+                "api_gateway": "localhost:8000",
+            }
+            debug_info["_security_audit_url"] = "http://localhost:4000/admin"
+            response_headers["X-Debug-Service"] = "internal-banking-debug.securebank.in:4000"
+
+        if attempt_num >= 3:
+            debug_info["_debug_failover_notice"] = (
+                "SECURITY NOTICE: Multiple auth failures detected. "
+                "Debug portal available at http://localhost:4000 — "
+                "Admin export at http://localhost:5000"
+            )
+            debug_info["_internal_network_topology"] = {
+                "3000": "production-banking-frontend",
+                "4000": "debug-banking-portal (exposed)",
+                "5000": "admin-data-export-service",
+                "8000": "internal-api-gateway",
+            }
+            response_headers["X-Failover-Node"] = "http://localhost:4000"
+            response_headers["X-Admin-Portal"] = "http://localhost:5000"
+
+        if attempt_num >= 5:
+            tracker["locked_until"] = datetime.utcnow() + timedelta(seconds=60)
+
+        return JSONResponse(
+            status_code=401,
+            content={
+                "success": False,
+                "error": "invalid_credentials",
+                "message": "Invalid account number or IPIN. Please try again.",
+                "attempts_remaining": max(0, 5 - attempt_num),
+                **debug_info,
+            },
+            headers=response_headers,
+        )
+
+    # Success — reset failure count
+    _LOGIN_FAILURES[client_ip] = {"count": 0, "locked_until": None}
     return {
         "success": True,
         "token": f"real_jwt_{body.account_number}_{uuid.uuid4().hex[:12]}",
@@ -230,12 +329,11 @@ async def honey_auth(body: HoneyAuthRequest, request: Request, db: DBSession = D
 
     # Detect attack tools
     ua = request.headers.get("User-Agent", "")
-    signal = "login_attempt"
     if detect_attack_tool(ua):
         await log_event_and_score(sess, "attack_tool_ua", "LOGIN_ATTEMPT", "/honey/auth",
                                   {"username": body.username, "user_agent": ua}, db)
 
-    await log_event_and_score(sess, signal, "LOGIN_ATTEMPT", "/honey/auth",
+    await log_event_and_score(sess, "login_attempt", "LOGIN_ATTEMPT", "/honey/auth",
                               {"username": body.username, "password": body.password[:3]+"***"}, db)
 
     return {
@@ -382,6 +480,11 @@ async def receive_telemetry(payload: TelemetryPayload, request: Request,
     if payload.canvasHash:
         sess.canvas_hash = payload.canvasHash
     sess.device_profile = device_profile
+
+    # ── Geolocation resolution ──────────────────────────────────────────────
+    ip_to_resolve = payload.webrtcIP or sess.ip_header
+    geo_data = resolve_ip(ip_to_resolve)
+    sess.geo_data = geo_data
     db.commit()
 
     # Check Tor/VPN
@@ -391,20 +494,59 @@ async def receive_telemetry(payload: TelemetryPayload, request: Request,
         await log_event_and_score(sess, "tor_vpn_detected", "TELEMETRY", "/api/telemetry",
                                   {"ip": ip_to_check, **tor_result}, db)
 
-    await log_event_and_score(sess, "otp_trap_triggered", "TELEMETRY", "/api/telemetry",
-                              {"fingerprint": device_profile, "webrtc_ip": payload.webrtcIP}, db)
+    # Log telemetry capture (FIX: use telemetry_captured instead of otp_trap_triggered)
+    await log_event_and_score(sess, "telemetry_captured", "TELEMETRY", "/api/telemetry",
+                              {"fingerprint": device_profile, "webrtc_ip": payload.webrtcIP,
+                               "geo": geo_data}, db)
 
-    # Broadcast fingerprint to dashboard
+    # Broadcast fingerprint + geo to dashboard
     await manager.broadcast({
         "type": "fingerprint_captured",
         "session_id": sess.id,
         "webrtc_ip": payload.webrtcIP,
         "canvas_hash": payload.canvasHash,
         "device_profile": device_profile,
+        "geo_data": geo_data,
         "threat_score": sess.threat_score,
         "tier": sess.tier,
     })
     return {"status": "received", "session_id": sess.id}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# ADMIN PORTAL EVENT LOGGING (called by port 5000 service)
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.post("/internal/admin-portal-event")
+async def admin_portal_event(body: AdminPortalEvent, request: Request,
+                             db: DBSession = Depends(get_db)):
+    """Internal endpoint for port 5000 admin portal to log events."""
+    sess = get_or_create_session(body.session_id, request, db)
+    result = await log_event_and_score(
+        sess, body.signal, "HONEYTOKEN_ACCESS", body.path,
+        body.payload or {}, db
+    )
+    return {"session_id": sess.id, "threat_score": sess.threat_score, "tier": sess.tier}
+
+
+@app.post("/api/verify-otp")
+async def verify_otp(request: Request, db: DBSession = Depends(get_db)):
+    """OTP verification endpoint — always fails, logs attempt."""
+    body = await request.json()
+    session_id = body.get("session_id")
+    otp_value = body.get("otp", "")
+    sess = get_or_create_session(session_id, request, db)
+    await log_event_and_score(sess, "otp_verify_attempt", "OTP_TRAP", "/api/verify-otp",
+                              {"otp_entered": otp_value}, db)
+    return JSONResponse(
+        status_code=403,
+        content={
+            "success": False,
+            "error": "invalid_otp",
+            "message": "Invalid OTP. Your session has been flagged for review.",
+            "session_id": sess.id,
+        }
+    )
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -424,6 +566,7 @@ async def list_sessions(db: DBSession = Depends(get_db)):
             "started_at": s.started_at.isoformat() if s.started_at else None,
             "last_seen": s.last_seen.isoformat() if s.last_seen else None,
             "has_dossier": bool(s.dossier_path),
+            "geo_data": s.geo_data,
         }
         for s in sessions
     ]
@@ -449,6 +592,8 @@ async def get_session(session_id: str, db: DBSession = Depends(get_db)):
             "started_at": sess.started_at.isoformat() if sess.started_at else None,
             "last_seen": sess.last_seen.isoformat() if sess.last_seen else None,
             "dossier_path": sess.dossier_path,
+            "geo_data": sess.geo_data,
+            "scored_signals": sess.scored_signals or [],
         },
         "events": [
             {
@@ -498,7 +643,7 @@ async def generate_pdf(session_id: str, db: DBSession = Depends(get_db)):
     signal_map = {
         "PATH_PROBE": "admin_access", "LOGIN_ATTEMPT": "login_attempt",
         "HONEYTOKEN_ACCESS": "honeytoken_config", "OTP_TRAP": "otp_trap_triggered",
-        "TELEMETRY": "otp_trap_triggered",
+        "TELEMETRY": "telemetry_captured",
     }
     for e in events_raw:
         sig = signal_map.get(e.event_type)
@@ -515,6 +660,7 @@ async def generate_pdf(session_id: str, db: DBSession = Depends(get_db)):
         "tier": sess.tier,
         "started_at": sess.started_at.isoformat() if sess.started_at else "",
         "last_seen": sess.last_seen.isoformat() if sess.last_seen else "",
+        "geo_data": sess.geo_data,
     }
 
     try:

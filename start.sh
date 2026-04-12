@@ -1,7 +1,7 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
 # MIRAGE — Single-command startup script (no Docker required)
-# Starts all four services in parallel
+# Starts all five services in parallel
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e
@@ -56,15 +56,20 @@ echo "  ● Backend API     → http://localhost:8000"
 
 sleep 2  # Give backend time to start and init DB
 
-# ── Service 2: Real Bank Frontend (:3000) ─────────────────────────────────────
+# ── Service 2: Admin Portal (:5000) ───────────────────────────────────────────
+echo "  ● Admin Portal    → http://localhost:5000"
+(cd backend && .venv/bin/uvicorn admin_portal:app --host 0.0.0.0 --port 5000 --reload 2>&1 | \
+  sed 's/^/[admin]   /') &
+
+# ── Service 3: Real Bank Frontend (:3000) ─────────────────────────────────────
 echo "  ● Real Bank       → http://localhost:3000"
 (cd frontend-bank && npm run dev -- --port 3000 2>&1 | sed 's/^/[bank]    /') &
 
-# ── Service 3: Honeypot Frontend (:4000) ──────────────────────────────────────
+# ── Service 4: Honeypot Frontend (:4000) ──────────────────────────────────────
 echo "  ● Honeypot        → http://localhost:4000"
 (cd frontend-honeypot && npm run dev -- --port 4000 2>&1 | sed 's/^/[honey]   /') &
 
-# ── Service 4: SOC Dashboard (:8080) ──────────────────────────────────────────
+# ── Service 5: SOC Dashboard (:8080) ──────────────────────────────────────────
 echo "  ● SOC Dashboard   → http://localhost:8080"
 (cd frontend-dashboard && npm run dev -- --port 8080 2>&1 | sed 's/^/[dash]    /') &
 
@@ -74,8 +79,11 @@ echo "║  All services starting... (allow ~10 seconds)               ║"
 echo "║                                                              ║"
 echo "║  Real Bank    http://localhost:3000  (demo: 40021234567)     ║"
 echo "║  Honeypot     http://localhost:4000  (any credentials work)  ║"
+echo "║  Admin Portal http://localhost:5000  (export portal)         ║"
 echo "║  Backend API  http://localhost:8000/docs                     ║"
 echo "║  Dashboard    http://localhost:8080  (SOC analyst view)      ║"
+echo "║                                                              ║"
+echo "║  OTP Exploit: python3 backend/otp_exploit.py                 ║"
 echo "║                                                              ║"
 echo "║  Press Ctrl+C to stop all services                          ║"
 echo "╚══════════════════════════════════════════════════════════════╝"

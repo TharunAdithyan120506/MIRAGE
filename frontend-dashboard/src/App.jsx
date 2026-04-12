@@ -86,6 +86,7 @@ export default function App() {
 
   const deviceProfile = sessionDetail?.session?.device_profile || {}
   const sessionEvents = sessionDetail?.events || []
+  const geoData = sessionDetail?.session?.geo_data || {}
 
   return (
     <div style={{
@@ -219,7 +220,7 @@ export default function App() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <ThreatGauge score={displayScore} tier={displayTier} />
 
-            {/* Fingerprint detail card */}
+            {/* Fingerprint + Geolocation detail card */}
             {sessionDetail?.session && (
               <div style={{
                 background: '#161B22', border: '1px solid #30363D',
@@ -237,13 +238,79 @@ export default function App() {
                                     ? sessionDetail.session.webrtc_ip + ' ⚠️'
                                     : 'Collecting...'],
                   ['Canvas Hash', sessionDetail.session.canvas_hash || 'Pending...'],
-                  ['Timezone',    deviceProfile.timezone || '—'],
-                  ['Screen',      deviceProfile.screen || '—'],
-                  ['Cores / RAM', `${deviceProfile.cores || '?'} cores / ${deviceProfile.memory || '?'} GB`],
                 ].map(([k, v]) => (
                   <div key={k} style={{
                     display: 'flex', justifyContent: 'space-between',
                     padding: '5px 0', borderBottom: '1px solid #21262D',
+                    gap: 8
+                  }}>
+                    <span style={{ color: '#8B949E', whiteSpace: 'nowrap' }}>{k}</span>
+                    <span style={{
+                      fontFamily: 'monospace', color: '#79C0FF',
+                      fontSize: 11, textAlign: 'right', overflow: 'hidden',
+                      textOverflow: 'ellipsis', maxWidth: 130
+                    }}>
+                      {v}
+                    </span>
+                  </div>
+                ))}
+
+                {/* Geolocation Section */}
+                {geoData.city && (
+                  <>
+                    <div style={{
+                      color: '#C8102E', fontWeight: 700, marginTop: 12, marginBottom: 6,
+                      fontSize: 12, display: 'flex', alignItems: 'center', gap: 6,
+                      borderTop: '1px solid #30363D', paddingTop: 10,
+                    }}>
+                      📍 Physical Location
+                    </div>
+                    {[
+                      ['City',       `${geoData.city}, ${geoData.region || ''}`],
+                      ['Country',    `${geoData.country || '—'} ${geoData.countryCode === 'IN' ? '🇮🇳' : geoData.countryCode === 'US' ? '🇺🇸' : geoData.countryCode === 'CN' ? '🇨🇳' : geoData.countryCode === 'RU' ? '🇷🇺' : '🌍'}`],
+                      ['ISP',        geoData.isp || '—'],
+                      ['Org',        geoData.org || '—'],
+                      ['Coords',     geoData.lat ? `${geoData.lat.toFixed(4)}, ${geoData.lon.toFixed(4)}` : '—'],
+                    ].map(([k, v]) => (
+                      <div key={k} style={{
+                        display: 'flex', justifyContent: 'space-between',
+                        padding: '4px 0', borderBottom: '1px solid #21262D',
+                        gap: 8
+                      }}>
+                        <span style={{ color: '#8B949E', whiteSpace: 'nowrap' }}>{k}</span>
+                        <span style={{
+                          fontFamily: 'monospace', color: '#F0883E',
+                          fontSize: 11, textAlign: 'right', overflow: 'hidden',
+                          textOverflow: 'ellipsis', maxWidth: 130
+                        }}>
+                          {v}
+                        </span>
+                      </div>
+                    ))}
+                    {geoData.is_demo && (
+                      <div style={{ fontSize: 10, color: '#484F58', marginTop: 6, fontStyle: 'italic' }}>
+                        ⚡ Demo mode — using simulated IP geolocation
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Device fingerprint section */}
+                <div style={{
+                  color: '#8B949E', fontWeight: 600, marginTop: 10, marginBottom: 6,
+                  fontSize: 11, borderTop: '1px solid #30363D', paddingTop: 8,
+                }}>
+                  🖥️ Device Profile
+                </div>
+                {[
+                  ['Timezone',    deviceProfile.timezone || '—'],
+                  ['Screen',      deviceProfile.screen || '—'],
+                  ['Cores / RAM', `${deviceProfile.cores || '?'} cores / ${deviceProfile.memory || '?'} GB`],
+                  ['Language',    deviceProfile.language || '—'],
+                ].map(([k, v]) => (
+                  <div key={k} style={{
+                    display: 'flex', justifyContent: 'space-between',
+                    padding: '4px 0', borderBottom: '1px solid #21262D',
                     gap: 8
                   }}>
                     <span style={{ color: '#8B949E', whiteSpace: 'nowrap' }}>{k}</span>

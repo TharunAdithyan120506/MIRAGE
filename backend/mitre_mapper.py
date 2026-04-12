@@ -8,14 +8,14 @@ MITRE_TABLE = [
         "technique_id": "T1595.003",
         "tactic": "Reconnaissance",
         "technique_name": "Active Scanning: Wordlist Scanning",
-        "signals": ["admin_access", "rapid_path_scan", "phpmyadmin_visit"],
+        "signals": ["admin_access", "rapid_path_scan", "phpmyadmin_visit", "admin_portal_access", "nmap_scan_detected"],
         "description": "Attacker probed common admin paths (/admin, /phpmyadmin) indicating automated or manual wordlist scanning.",
     },
     {
         "technique_id": "T1078",
         "tactic": "Initial Access",
         "technique_name": "Valid Accounts",
-        "signals": ["login_attempt", "multi_cred_attempt", "dashboard_visit", "extended_session"],
+        "signals": ["login_attempt", "multi_cred_attempt", "dashboard_visit", "extended_session", "otp_verify_attempt"],
         "description": "Attacker authenticated using arbitrary credentials on honeypot — honeypot accepts any login.",
     },
     {
@@ -50,7 +50,7 @@ MITRE_TABLE = [
         "technique_id": "T1041",
         "tactic": "Exfiltration",
         "technique_name": "Exfiltration Over C2 Channel",
-        "signals": ["otp_trap_triggered"],
+        "signals": ["otp_trap_triggered", "admin_export_attempt"],
         "description": "Attacker attempted to export user data, triggering the OTP trap and fingerprinting sequence.",
     },
     {
@@ -66,6 +66,13 @@ MITRE_TABLE = [
         "technique_name": "Proxy",
         "signals": ["tor_vpn_detected"],
         "description": "Traffic originated from a Tor exit node or known VPN IP range.",
+    },
+    {
+        "technique_id": "T1082",
+        "tactic": "Discovery",
+        "technique_name": "System Information Discovery",
+        "signals": ["telemetry_captured"],
+        "description": "Device fingerprint captured: WebRTC IP, canvas hash, hardware profile, timezone, and geolocation.",
     },
 ]
 

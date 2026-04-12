@@ -192,19 +192,42 @@ def generate_dossier(session: dict, events: list[dict], mitre_techniques: list[d
     story.append(Spacer(1, 0.15*inch))
 
     device = session.get("device_profile") or {}
-    story.append(_kv_table([
+    geo = session.get("geo_data") or {}
+
+    identity_rows = [
         ("Header IP",          session.get("ip_header", "Unknown")),
-        ("WebRTC Real IP",     session.get("webrtc_ip", "Not captured") + " ← bypasses VPN"),
+        ("WebRTC Real IP",     (session.get("webrtc_ip") or "Not captured") + " ← bypasses VPN"),
         ("User Agent",         session.get("user_agent", "Unknown")),
         ("Canvas Hash",        session.get("canvas_hash", "Not captured")),
-        ("Timezone",           device.get("timezone", "Unknown")),
+        ("Browser / OS",       _parse_ua(session.get("user_agent", ""))),
+    ]
+
+    # Geolocation data
+    if geo.get("city"):
+        identity_rows.extend([
+            ("— GEOLOCATION —",    "— Resolved from IP —"),
+            ("City",               f"{geo.get('city', 'Unknown')}, {geo.get('region', '')}"),
+            ("Country",            f"{geo.get('country', 'Unknown')} ({geo.get('countryCode', '??')})"),
+            ("ISP",                geo.get("isp", "Unknown")),
+            ("Organization",       geo.get("org", "Unknown")),
+            ("AS Number",          geo.get("as", "Unknown")),
+            ("Coordinates",        f"{geo.get('lat', 0)}, {geo.get('lon', 0)}"),
+            ("Timezone",           geo.get("timezone", device.get("timezone", "Unknown"))),
+        ])
+    else:
+        identity_rows.append(("Timezone", device.get("timezone", "Unknown")))
+
+    # Device profile
+    identity_rows.extend([
+        ("— DEVICE PROFILE —",  "— Fingerprint Data —"),
         ("Language",           device.get("language", "Unknown")),
         ("Screen Resolution",  device.get("screen", "Unknown")),
         ("CPU Cores",          str(device.get("cores", "Unknown"))),
         ("Device Memory",      f"{device.get('memory', 'Unknown')} GB"),
         ("Touch Points",       str(device.get("touchPoints", "Unknown"))),
-        ("Browser / OS",       _parse_ua(session.get("user_agent", ""))),
-    ]))
+    ])
+
+    story.append(_kv_table(identity_rows))
     story.append(PageBreak())
 
     # ── PAGE 4: Attack Timeline ───────────────────────────────────────────────
