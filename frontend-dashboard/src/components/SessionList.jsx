@@ -1,9 +1,14 @@
+import { dash } from '../dashboardTheme'
+
 const TIER_COLORS = {
-  'Script Kiddie':     '#1A7A4A',
-  'Opportunist':       '#E05C00',
-  'Targeted Attacker': '#B00020',
-  'APT-Level':         '#8B0000',
+  'Script Kiddie':     '#1B5E20',
+  'Opportunist':       '#E65100',
+  'Targeted Attacker': dash.red,
+  'APT-Level':         dash.redDark,
 }
+
+const bw = dash.borderWidth
+const borderBlack = `${bw}px solid ${dash.black}`
 
 function timeAgo(ts) {
   if (!ts) return '—'
@@ -13,85 +18,252 @@ function timeAgo(ts) {
   return `${Math.floor(diff / 3600)}h ago`
 }
 
-export default function SessionList({ sessions, selectedId, onSelect }) {
+export default function SessionList({ sessions, selectedId, onSelect, fillHeight }) {
+  const fill = fillHeight
+    ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+    : {}
+
   if (!sessions.length) return (
     <div style={{
-      background: '#161B22', border: '1px solid #30363D', borderRadius: 12,
-      padding: 24, color: '#8B949E', fontSize: 13, textAlign: 'center'
+      background: dash.card,
+      border: borderBlack,
+      borderRadius: dash.radius,
+      padding: 22,
+      color: dash.textBody,
+      fontSize: 16,
+      textAlign: 'center',
+      boxShadow: dash.shadowHard,
+      width: '100%',
+      justifyContent: fillHeight ? 'center' : undefined,
+      ...fill,
     }}>
-      <div style={{ fontSize: 36, marginBottom: 8 }}>👤</div>
-      No active honeypot sessions yet.
+      <div style={{ fontSize: 40, marginBottom: dash.space.md }} aria-hidden>👤</div>
+      <div style={{
+        fontWeight: 800,
+        color: dash.text,
+        marginBottom: dash.space.sm,
+        textTransform: 'uppercase',
+      }}>No sessions yet</div>
+      <div style={{
+        fontSize: 15,
+        lineHeight: dash.lineBody,
+        maxWidth: 300,
+        margin: '0 auto',
+      }}>
+        Decoy hits show up here — click to inspect.
+      </div>
     </div>
   )
 
   return (
     <div style={{
-      background: '#161B22', border: '1px solid #30363D', borderRadius: 12,
+      background: dash.card,
+      border: borderBlack,
+      borderRadius: dash.radius,
       overflow: 'hidden',
+      boxShadow: dash.shadowHard,
+      width: '100%',
+      ...fill,
     }}>
       <div style={{
-        padding: '14px 20px', borderBottom: '1px solid #30363D',
-        background: '#0D1117', display: 'flex', alignItems: 'center', gap: 8
+        padding: `${dash.space.md}px ${dash.space.lg}px`,
+        borderBottom: borderBlack,
+        background: dash.bgElevated,
+        display: 'flex',
+        alignItems: 'center',
+        gap: dash.space.sm,
+        flexShrink: 0,
       }}>
-        <span style={{ fontSize: 16 }}>👥</span>
-        <span style={{ color: '#E6EDF3', fontWeight: 700, fontSize: 14 }}>Active Sessions</span>
-        <span style={{
-          marginLeft: 'auto', background: '#21262D', color: '#8B949E',
-          fontSize: 11, padding: '2px 10px', borderRadius: 999
-        }}>
-          {sessions.length} session{sessions.length !== 1 ? 's' : ''}
-        </span>
+        <span style={{ fontSize: 20 }} aria-hidden>👥</span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{
+            color: dash.text,
+            fontWeight: 800,
+            fontSize: 18,
+            letterSpacing: '-0.02em',
+            textTransform: 'uppercase',
+          }}>
+            Sessions
+          </div>
+          <div style={{
+            fontSize: 13,
+            color: dash.textBody,
+            marginTop: dash.space.xs,
+            fontFamily: dash.fontMono,
+            fontWeight: 600,
+            lineHeight: dash.lineBody,
+          }}>
+            Select session · {sessions.length} total
+          </div>
+        </div>
       </div>
 
-      <div style={{ maxHeight: 340, overflowY: 'auto' }}>
+      <ul style={{
+        listStyle: 'none',
+        margin: 0,
+        padding: 0,
+        flex: fillHeight ? 1 : undefined,
+        minHeight: fillHeight ? 0 : undefined,
+        overflowY: fillHeight ? 'auto' : undefined,
+      }}
+      >
         {sessions.map((sess) => {
-          const tierColor = TIER_COLORS[sess.tier] || '#1A7A4A'
+          const tierColor = TIER_COLORS[sess.tier] || '#1B5E20'
           const isSelected = sess.id === selectedId
 
           return (
-            <div key={sess.id} onClick={() => onSelect(sess.id)} style={{
-              padding: '12px 20px', borderBottom: '1px solid #21262D',
-              cursor: 'pointer', transition: 'background 0.15s',
-              background: isSelected ? '#003366' + '33' : 'transparent',
-              borderLeft: isSelected ? '3px solid #003366' : '3px solid transparent',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-                <code style={{
-                  color: '#58A6FF', fontSize: 11, background: '#0D1117',
-                  padding: '1px 6px', borderRadius: 3
+            <li key={sess.id}>
+              <div
+                role="button"
+                tabIndex={0}
+                aria-selected={isSelected}
+                aria-label={`Session ${sess.id?.slice(0, 8)}, threat ${sess.threat_score}, ${sess.tier}`}
+                onClick={() => onSelect(sess.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onSelect(sess.id)
+                  }
+                }}
+                className="session-row-brut"
+                style={{
+                  padding: `${dash.space.md}px ${dash.space.lg}px`,
+                  borderBottom: `${dash.borderWidthSm}px dashed ${dash.black}`,
+                  cursor: 'pointer',
+                  background: isSelected ? dash.red : 'transparent',
+                  color: isSelected ? dash.card : dash.textBody,
+                  borderLeft: isSelected ? `${bw}px solid ${dash.black}` : `${bw}px solid transparent`,
+                  outline: 'none',
+                  boxShadow: isSelected ? 'none' : undefined,
+                }}
+              >
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: dash.space.sm,
+                  marginBottom: dash.space.sm,
+                  flexWrap: 'wrap',
                 }}>
-                  {sess.id?.slice(0, 8)}…
-                </code>
-                <span style={{
-                  marginLeft: 'auto',
-                  background: tierColor + '22', color: tierColor,
-                  border: `1px solid ${tierColor}44`,
-                  fontSize: 10, fontWeight: 700, padding: '1px 8px', borderRadius: 999
+                  <span style={{
+                    fontSize: 10,
+                    fontWeight: 800,
+                    color: isSelected ? dash.card : dash.text,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    fontFamily: dash.fontMono,
+                  }}>
+                    Session
+                  </span>
+                  <code style={{
+                    color: isSelected ? dash.black : dash.redDark,
+                    fontSize: 11,
+                    background: isSelected ? dash.card : dash.bgElevated,
+                    padding: '4px 8px',
+                    borderRadius: dash.radius,
+                    fontFamily: dash.fontMono,
+                    border: `${dash.borderWidthSm}px solid ${dash.black}`,
+                    fontWeight: 700,
+                  }}>
+                    {sess.id?.slice(0, 8)}…
+                  </code>
+                  <span style={{
+                    marginLeft: 'auto',
+                    background: isSelected ? dash.card : dash.bgElevated,
+                    color: isSelected ? tierColor : tierColor,
+                    border: `${dash.borderWidthSm}px solid ${dash.black}`,
+                    fontSize: 10,
+                    fontWeight: 800,
+                    padding: '5px 10px',
+                    textTransform: 'uppercase',
+                    fontFamily: dash.fontMono,
+                  }}>
+                    {sess.tier}
+                  </span>
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'baseline',
+                  gap: dash.space.md,
+                  fontSize: 14,
+                  marginTop: dash.space.xs,
                 }}>
-                  {sess.tier}
-                </span>
-              </div>
+                  <div>
+                    <div style={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      color: isSelected ? dash.card : dash.textSubtle,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      marginBottom: 2,
+                      fontFamily: dash.fontMono,
+                    }}>
+                      IP
+                    </div>
+                    <span style={{
+                      fontFamily: dash.fontMono,
+                      color: isSelected ? dash.card : dash.text,
+                      fontWeight: 700,
+                    }}>
+                      {sess.webrtc_ip || sess.ip_header || 'Unknown'}
+                    </span>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      color: isSelected ? dash.card : dash.textSubtle,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      marginBottom: 2,
+                      fontFamily: dash.fontMono,
+                    }}>
+                      Score
+                    </div>
+                    <span style={{
+                      color: isSelected ? dash.card : tierColor,
+                      fontWeight: 800,
+                      fontSize: 18,
+                      letterSpacing: '-0.02em',
+                      fontFamily: dash.fontSans,
+                    }}>
+                      {sess.threat_score}
+                      <span style={{
+                        color: isSelected ? dash.card : dash.textBody,
+                        fontWeight: 700,
+                        fontSize: 13,
+                      }}> /100</span>
+                    </span>
+                  </div>
+                </div>
 
-              <div style={{
-                display: 'flex', justifyContent: 'space-between',
-                fontSize: 11, color: '#8B949E'
-              }}>
-                <span style={{ fontFamily: 'monospace' }}>
-                  {sess.webrtc_ip || sess.ip_header || 'Unknown IP'}
-                </span>
-                <span style={{ color: tierColor, fontWeight: 700, fontSize: 13 }}>
-                  {sess.threat_score}
-                  <span style={{ color: '#8B949E', fontWeight: 400 }}>/100</span>
-                </span>
+                <div style={{
+                  fontSize: 12,
+                  color: isSelected ? dash.card : dash.textSubtle,
+                  marginTop: dash.space.md,
+                  lineHeight: dash.lineBody,
+                  fontFamily: dash.fontMono,
+                  fontWeight: 600,
+                }}>
+                  First {timeAgo(sess.started_at)} · Last {timeAgo(sess.last_seen)}
+                </div>
               </div>
-
-              <div style={{ fontSize: 10, color: '#484F58', marginTop: 3 }}>
-                Started {timeAgo(sess.started_at)} • Last seen {timeAgo(sess.last_seen)}
-              </div>
-            </div>
+            </li>
           )
         })}
-      </div>
+      </ul>
+
+      <style>{`
+        .session-row-brut:focus-visible {
+          outline: ${bw}px solid ${dash.black};
+          outline-offset: 2px;
+        }
+        .session-row-brut:not([aria-selected="true"]):hover {
+          background: ${dash.bgElevated};
+          box-shadow: inset 4px 0 0 ${dash.red};
+        }
+      `}</style>
     </div>
   )
 }
