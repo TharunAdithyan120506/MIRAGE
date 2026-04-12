@@ -1,6 +1,8 @@
 """
 MIRAGE Backend — Database Models (SQLite + SQLAlchemy)
 Sessions and Events tables as defined in PRD Section 5.4
+
+PRODUCTION UPDATE: Added scored_signals and geo_data columns.
 """
 import uuid
 from datetime import datetime
@@ -29,6 +31,9 @@ class Session(Base):
     started_at = Column(DateTime, default=datetime.utcnow)
     last_seen = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     dossier_path = Column(Text, nullable=True)
+    # Production additions
+    scored_signals = Column(JSON, nullable=True, default=list)  # List of already-scored signal keys
+    geo_data = Column(JSON, nullable=True)  # Geolocation data from IP resolution
 
     events = relationship("Event", back_populates="session", cascade="all, delete-orphan")
 

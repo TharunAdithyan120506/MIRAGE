@@ -52,7 +52,7 @@ Write-Host ""
 Write-Host "[MIRAGE] Starting all services..."
 Write-Host ""
 
-Write-Host "Backend API   -> http://localhost:8000"
+Write-Host "Backend API     -> http://localhost:8000"
 Start-Job -Name Backend -ScriptBlock {
     Set-Location "$using:SCRIPT_DIR\backend"
     .\.venv\Scripts\uvicorn.exe main:app --host 0.0.0.0 --port 8000 --reload 2>&1 | ForEach-Object { "$_" }
@@ -60,19 +60,25 @@ Start-Job -Name Backend -ScriptBlock {
 
 Start-Sleep -Seconds 2
 
-Write-Host "Real Bank     -> http://localhost:3000"
+Write-Host "Admin Portal    -> http://localhost:5000"
+Start-Job -Name AdminPortal -ScriptBlock {
+    Set-Location "$using:SCRIPT_DIR\backend"
+    .\.venv\Scripts\uvicorn.exe admin_portal:app --host 0.0.0.0 --port 5000 --reload 2>&1 | ForEach-Object { "$_" }
+}
+
+Write-Host "Real Bank       -> http://localhost:3000"
 Start-Job -Name Bank -ScriptBlock {
     Set-Location "$using:SCRIPT_DIR\frontend-bank"
     npx vite --port 3000 2>&1 | ForEach-Object { "$_" }
 }
 
-Write-Host "Honeypot      -> http://localhost:4000"
+Write-Host "Honeypot        -> http://localhost:4000"
 Start-Job -Name Honeypot -ScriptBlock {
     Set-Location "$using:SCRIPT_DIR\frontend-honeypot"
     npx vite --port 4000 2>&1 | ForEach-Object { "$_" }
 }
 
-Write-Host "SOC Dashboard -> http://localhost:8080"
+Write-Host "SOC Dashboard   -> http://localhost:8080"
 Start-Job -Name Dashboard -ScriptBlock {
     Set-Location "$using:SCRIPT_DIR\frontend-dashboard"
     npx vite --port 8080 2>&1 | ForEach-Object { "$_" }
@@ -82,10 +88,13 @@ Write-Host ""
 Write-Host "=============================================================="
 Write-Host "All services starting... Allow ~10 seconds"
 Write-Host ""
-Write-Host "Real Bank:    http://localhost:3000"
-Write-Host "Honeypot:     http://localhost:4000"
-Write-Host "Backend API:  http://localhost:8000/docs"
-Write-Host "Dashboard:    http://localhost:8080"
+Write-Host "Real Bank:      http://localhost:3000  (demo: 40021234567)"
+Write-Host "Honeypot:       http://localhost:4000  (any credentials work)"
+Write-Host "Admin Portal:   http://localhost:5000  (export portal)"
+Write-Host "Backend API:    http://localhost:8000/docs"
+Write-Host "Dashboard:      http://localhost:8080  (SOC analyst view)"
+Write-Host ""
+Write-Host "OTP Exploit:    python backend\otp_exploit.py"
 Write-Host "=============================================================="
 Write-Host ""
 
@@ -94,7 +103,7 @@ try {
         foreach ($j in Get-Job) {
             $output = Receive-Job $j -ErrorAction Continue
             if ($output) {
-                $prefix = "[$($j.Name.PadRight(9))] "
+                $prefix = "[$($j.Name.PadRight(12))] "
                 $output | ForEach-Object { Write-Host "$prefix$_" }
             }
         }
